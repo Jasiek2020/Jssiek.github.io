@@ -1,0 +1,16 @@
+{
+  "name": "Banners of the Vale",
+  "short_name": "Banners",
+  "description": "A pocket real-time strategy game: build, gather, raise an army and conquer the vale.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#1e140b",
+  "theme_color": "#3d2a19",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
