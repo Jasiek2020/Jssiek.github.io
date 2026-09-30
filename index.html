@@ -4,8 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Banners of the Vale</title>
-<!-- App install: the manifest describes the app to the phone; the icons
-     are what appears on the home screen. -->
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -334,7 +332,7 @@ const sidesOf = () => [PLAYER, ...G.opponents];
 // LESSON: Teams. "Different owner" no longer means "enemy": two sides on the
 // same team are allies. Every targeting rule asks hostile(a, b) instead of
 // a !== b, so alliances work everywhere at once. Creatures are everyone's enemy.
-const hostile = (a, b) => a !== b && a !== NEUTRAL && b !== NEUTRAL &&
+const hostile = (a, b) => a !== b && a != null && b != null && a !== NEUTRAL && b !== NEUTRAL &&   // things with no owner (trees) are never enemies
   !(isSide(a) && isSide(b) && G.teams && G.teams[a] !== undefined && G.teams[a] === G.teams[b]);
 const allied = (a, b) => a === b || (isSide(a) && isSide(b) && !hostile(a, b));
 
@@ -360,13 +358,13 @@ const DIRS = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
 const FACTIONS = [
   { name:'Kingdom', color:'#3f6fb5', dark:'#27477a', light:'#7fa6dc', skin:'#e3b58c',
     helm:'#9aa3ab', wall:'#a79f90', horns:false,
-    names:{ worker:'Worker', footman:'Footman', archer:'Longbowman', javelin:'Javelin thrower', ranged:'Longbowman', scorpion:'Scorpion', cannon:'Cannon', siege:'Scorpion', hero:'Commander', healer:'High Priestess', cage:'Prison cage', wagon:'Supply wagon', knight:'Knight', priest:'Priest', mage:'Sorceress',
-            townhall:'Keep', townhall2:'Castle', townhall3:'Citadel', farm:'Farm', farm2:'Homestead', barracks:'Barracks', tower:'Guard tower', tower2:'Fortified tower', market:'Market', lumbermill:'Lumber mill',
+    names:{ worker:'Worker', footman:'Footman', archer:'Longbowman', javelin:'Javelin thrower', ranged:'Longbowman', scorpion:'Scorpion', cannon:'Cannon', siege:'Scorpion', hero:'Commander', healer:'High Priestess', cage:'Prison cage', wagon:'Supply wagon', scout:'Scout', knight:'Knight', priest:'Priest', mage:'Sorceress',
+            townhall:'Keep', townhall2:'Castle', townhall3:'Citadel', farm:'Farm', farm2:'Homestead', barracks:'Barracks', tower:'Watch tower', tower2:'Guard tower', tower3:'Fortified tower', market:'Market', lumbermill:'Lumber mill',
             blacksmith:'Blacksmith', stable:'Stable', temple:'Temple' } },
   { name:'Orc clans', color:'#b4412a', dark:'#6f2417', light:'#e07a5c', skin:'#79a24d',
     helm:'#4a4038', wall:'#72502f', horns:true,
-    names:{ worker:'Laborer', footman:'Warrior', archer:'Spearthrower', javelin:'Javelin thrower', ranged:'Javelin thrower', cannon:'Orc cannon', scorpion:'Scorpion', siege:'Orc cannon', hero:'Warlord', healer:'Goblin alchemist', cage:'Prison cage', wagon:'Supply wagon', knight:'Wolf rider', priest:'Shaman', mage:'Hexer',
-            townhall:'Stronghold', townhall2:'Fortress', townhall3:'Warhold', farm:'Pig pen', farm2:'Hog farm', barracks:'War camp', tower:'Watch tower', tower2:'Spiked tower', market:'Trading post', lumbermill:'Wood yard',
+    names:{ worker:'Laborer', footman:'Warrior', archer:'Spearthrower', javelin:'Javelin thrower', ranged:'Javelin thrower', cannon:'Orc cannon', scorpion:'Scorpion', siege:'Orc cannon', hero:'Warlord', healer:'Goblin alchemist', cage:'Prison cage', wagon:'Supply wagon', scout:'Goblin scout', knight:'Wolf rider', priest:'Shaman', mage:'Hexer',
+            townhall:'Stronghold', townhall2:'Fortress', townhall3:'Warhold', farm:'Pig pen', farm2:'Hog farm', barracks:'War camp', tower:'Spear tower', tower2:'Spiked tower', market:'Trading post', lumbermill:'Wood yard',
             blacksmith:'War forge', stable:'Wolf den', temple:'Spirit lodge' } },
   // Wild creatures. Nobody controls them; they guard their camps.
   { name:'Wild creatures', color:'#9b7fd0', dark:'#5e4a86', light:'#c9b6ef', skin:'#9b8fb0',
@@ -391,6 +389,9 @@ const UNIT_TYPES = {
   // damage to buildings and big creatures.
   javelin: { hp:55,  armor:1, damage:10, range:4.5, cooldown:1.6, speed:2.2, sight:7,
              cost:{gold:70,  wood:40}, time:10, food:1, ranged:true, faction:'orcs', heavy:true },
+  // Orc Goblin scout: cheap, very fast and far-sighted; barely fights.
+  scout:   { hp:50,  armor:0, damage:3,  range:1,   cooldown:1.2, speed:3.6, sight:11,
+             cost:{gold:40, wood:0}, time:8, food:1, faction:'orcs' },
   // A supply wagon (mission "Escort the Caravan"): slow, sturdy, cannot fight.
   wagon:   { hp:400, armor:2, damage:0, range:0,   cooldown:9, speed:1.4, sight:5, big:true,
              cost:{gold:0, wood:0}, time:1, food:0, cart:true },
@@ -453,7 +454,7 @@ const BUILDING_TYPES = {
   cage:     { size:2, hp:260, armor:2, cost:{gold:0, wood:0}, time:1, food:0, sight:2, trains:[], research:[] },
   lair:     { size:2, hp:450, armor:3, cost:{gold:0, wood:0}, time:1, food:0, sight:3, trains:[], research:[] },
   townhall: { size:3, hp:1000, armor:3, cost:{gold:350, wood:200}, time:40, food:5, sight:7,
-              trains:['worker'], dropoff:true, research:['tools', 'pillage'],
+              trains:['worker', 'scout'], dropoff:true, research:['tools', 'tools2', 'pillage'],
               // Castle/Fortress unlocks the Stable and tier-2 research;
               // Citadel/Warhold (upgrade3) unlocks the Temple and tier-3 research.
               upgrade:{ cost:{gold:300, wood:200}, time:45, hp:500, armor:2 },
@@ -468,7 +469,9 @@ const BUILDING_TYPES = {
   tower:      { size:2, hp:500, armor:4, cost:{gold:120, wood:100}, time:25, food:0, sight:8, trains:[],
                 attack:{ damage:10, range:6, cooldown:1.6 },
                 // Fortifying a tower: more health and armor, +4 damage, +2 range and sight.
-                upgrade:{ cost:{gold:120, wood:100}, time:25, hp:250, armor:1, damage:4, range:2 } },
+                upgrade:{ cost:{gold:120, wood:100}, time:25, hp:250, armor:1, damage:4, range:2 },
+                // Kingdom towers start as Watch towers (see far, do not shoot); this first upgrade arms them.
+                guardUp:{ cost:{gold:80, wood:40}, time:20, hp:100, armor:0 } },
   // Sells items to your hero and trades lumber for gold.
   market:     { size:3, hp:600, armor:1, cost:{gold:140, wood:100}, time:25, food:0, sight:4, trains:[],
                 requires:'barracks', shop:true },
@@ -491,6 +494,7 @@ const BUILD_MENU = ['farm','barracks','townhall','lumbermill','blacksmith','towe
 // "hp" adds health to one unit type, including units you already have.
 const RESEARCH = {
   tools:     { name:'Heavy sacks',     desc:'Workers carry 15 instead of 10', cost:{gold:100, wood:60},  time:25 },
+  tools2:    { name:'Pack frames',     desc:'Workers carry 20 instead of 15', cost:{gold:250, wood:150}, time:40, needs:['tools', 'townhall2'] },
   // ----- Faction research: each side sees only its own ("faction" field) -----
   // Orc clans: tough, ferocious raiders.
   thickhides:{ faction:'orcs', name:'Thick hides',   desc:'All orc units +10% health', cost:{gold:200, wood:100}, time:35, needs:['townhall2'], hpPct:.1 },
@@ -574,6 +578,7 @@ const UNIT_DESC = {
   scorpion:'Siege scorpion: heavy bolts pierce through and hit up to 2 enemies behind the target. +50% damage to buildings.',
   javelin:'Sturdy ranged fighter with shorter range. Heavy javelins: +50% damage to buildings and big creatures.',
   hero:'Unique leader with skills and items. Gains experience from nearby kills.',
+  scout:'Fast, cheap and far-sighted: find the enemy and the creature camps. Barely fights.',
   wagon:'A slow supply wagon. It cannot fight: keep it safe!',
   healer:'Hero healer who attacks from range. Heals, shields herself and restores allies nearby.',
   knight:'Fast, armored rider. Good for raids and flanking.',
@@ -590,7 +595,7 @@ const BUILDING_DESC = {
   townhall:N => `Trains ${plural(N.worker)}; drop-off for gold and lumber. Upgrade it to unlock advanced buildings.`,
   farm:N => 'Provides 4 food (army size). Upgrade it to make gold over time.',
   barracks:N => `Trains ${plural(N.footman)}, ${plural(N.ranged)} and your heroes (the ${N.healer} needs a ${N.townhall2}).`,
-  tower:N => 'Shoots nearby enemies on its own. Fortify for more damage and range.',
+  tower:N => N.tower === 'Watch tower' ? 'Sees very far but does not attack. Upgrade it to a Guard tower to shoot enemies, then fortify it.' : 'Shoots nearby enemies on its own. Upgrade it for more damage and range.',
   lumbermill:N => 'Lumber drop-off. Researches archery and tougher buildings.',
   blacksmith:N => `Researches better weapons and armor, and builds the ${N.siege} (needs the second hall upgrade).`,
   stable:N => `Trains ${plural(N.knight)}.`,
@@ -721,10 +726,21 @@ const nameOf = e => { if (e.kind === 'mine') return 'Gold mine';
 // level 1 and 'upgrade3' at level 2; null means it is fully upgraded.
 function nextUpgrade(b){
   const BT = BUILDING_TYPES[b.type];
+  if (b.type === 'tower' && !isOrc(b.owner)){                 // Kingdom: watch -> guard -> fortified
+    if (b.level === 1) return techAllows('building', 'tower') ? BT.guardUp : null;
+    if (b.level === 2) return techAllows('upgrade', 'tower') ? BT.upgrade : null;
+    return null;
+  }
   if (b.type === 'townhall' ? !techAllows('hall', b.level + 1) : !techAllows('upgrade', b.type)) return null;   // campaign tech limits
   return b.level === 1 ? BT.upgrade || null : b.level === 2 ? BT.upgrade3 || null : null;
 }
-const upgradeData = (type, level) => level >= 3 ? BUILDING_TYPES[type].upgrade3 : BUILDING_TYPES[type].upgrade;
+const upgradeData = (type, level, owner) => type === 'tower' && owner != null && !isOrc(owner)
+  ? (level >= 3 ? BUILDING_TYPES.tower.upgrade : BUILDING_TYPES.tower.guardUp)        // Kingdom: watch -> guard -> fortified
+  : level >= 3 ? BUILDING_TYPES[type].upgrade3 : BUILDING_TYPES[type].upgrade;
+// LESSON: One building, different paths. A tower's "tier" says what it can do:
+// 0 = watch tower (sees far, no attack), 1 = guard tower, 2 = fortified.
+// Orc towers start at tier 1; Kingdom towers start as watch towers at tier 0.
+const towerTier = b => b.type !== 'tower' ? 0 : isOrc(b.owner) ? b.level : b.level - 1;
 
 
 /* =============================================================================
@@ -1106,6 +1122,7 @@ function kill(e, attacker){
   if (e.dead) return;
   e.dead = true; e.hp = 0;
   if (e.type === 'cage' && e.prisoners) freePrisoners(e);            // mission 5: prisoners join you
+  if (G.mission && e.kind === 'building' && e.type === 'farm' && hostile(PLAYER, e.owner)) G.mission.farmsBurned = (G.mission.farmsBurned || 0) + 1;
   { const c = centerOf(e); sfxAt(e.kind === 'building' ? 'collapse' : 'die', c.x, c.y, e.kind === 'building' ? 1 : .6); }
   if (e.kind === 'building'){
     markBlocked(e, 0);
@@ -1430,7 +1447,35 @@ function orderAttackMove(u, wx, wy){
   setOrder(u, { type:'attackMove', nav:{ rect:rectOfTile(tx, ty), adj:!isWalkable(tx, ty) } });
 }
 function orderAttack(u, target){ setOrder(u, { type:'attack', target, nav:null, fails:0 }); }
-function orderBuild(u, b){ setOrder(u, { type:'build', building:b, nav:{ rect:rectOf(b), adj:true } }); }
+function orderBuild(u, b){
+  const prev = u.order, resume = prev && prev.type === 'gather' ? prev : prev && prev.resume ? prev.resume : null;   // remember the old job
+  setOrder(u, { type:'build', building:b, nav:{ rect:rectOf(b), adj:true }, resume });
+}
+// LESSON: Workers that find their own work. After finishing a building, a
+// worker looks for something useful nearby: a new town hall sends it to the
+// nearest safe gold mine (or trees if there is none), a lumber mill to the
+// nearest trees, anything else back to the job it had before. Newly trained
+// workers without a rally point do the same, so fewer workers stand idle.
+function findWork(near, want){
+  const c = centerOf(near), tx = tileOf(c.x), ty = tileOf(c.y);
+  if (want !== 'wood'){
+    let best = null, bd = 14 * TILE;
+    for (const m of G.mines){ if (m.dead || !mineSafe(m)) continue; const mc = centerOf(m), d = Math.hypot(mc.x - c.x, mc.y - c.y); if (d < bd){ bd = d; best = m; } }
+    if (best) return best;
+  }
+  return nearestTree(tx, ty, 10);
+}
+function afterBuild(u, b, o){
+  let target = null;
+  if (b.type === 'townhall') target = findWork(b, 'gold');
+  else if (b.type === 'lumbermill') target = findWork(b, 'wood');
+  else if (o && o.resume){                              // back to the old job, if it still exists
+    const r = o.resume;
+    target = r.res === 'gold' ? (r.mine && !r.mine.dead ? r.mine : null)
+           : G.terrain[idx(r.tx, r.ty)] === T_TREE ? { tree:true, x:r.tx, y:r.ty } : nearestTree(r.tx, r.ty, 6);
+  }
+  if (target) orderGather(u, target); else u.order = null;
+}
 
 function orderGather(u, target){
   let o;
@@ -1692,7 +1737,8 @@ function doGather(u, o, dt){
 
 function doBuild(u, o, dt){
   const b = o.building;
-  if (!isAlive(b) || b.built >= 1){ u.order = null; return; }
+  if (!isAlive(b)){ u.order = null; return; }
+  if (b.built >= 1){ afterBuild(u, b, o); return; }          // another builder finished it: find work too
   if (distToRect(u, rectOf(b)) > WORK_REACH){
     // Walk back to the site. Another unit may have nudged us away, so if the
     // path ends too far away, try a fresh path a few times before giving up.
@@ -1711,7 +1757,7 @@ function doBuild(u, o, dt){
   b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.9 * step);
   if (b.built >= 1){
     if (b.maxHp - b.hp < 2) b.hp = b.maxHp;   // fix tiny rounding leftovers so it shows as fully healthy
-    u.order = null;
+    afterBuild(u, b, o);                        // go and gather something nearby
     if (b.owner === PLAYER){ toast(nameOf(b) + ' complete'); sfx('complete'); }
   }
 }
@@ -2202,12 +2248,12 @@ function tryResearch(b, key){
 // A building's queue can hold three kinds of items: units, research, upgrades.
 function queueTime(b, q){
   if (q.research) return RESEARCH[q.research].time;
-  if (q.upgrade) return upgradeData(b.type, q.to || 2).time;
+  if (q.upgrade) return upgradeData(b.type, q.to || 2, b.owner).time;
   return UNIT_TYPES[q.type].time;
 }
 function queueCost(b, q){
   if (q.research) return RESEARCH[q.research].cost;
-  if (q.upgrade) return upgradeData(b.type, q.to || 2).cost;
+  if (q.upgrade) return upgradeData(b.type, q.to || 2, b.owner).cost;
   return UNIT_TYPES[q.type].cost;
 }
 function tryUpgrade(b){
@@ -2242,11 +2288,12 @@ function updateBuilding(b, dt){
   if (q.t < queueTime(b, q)) return;
   b.queue.shift();
   if (q.upgrade){
-    const lvl = q.to || 2, UP = upgradeData(b.type, lvl), N = FACTIONS[b.owner].names;
+    const lvl = q.to || 2, UP = upgradeData(b.type, lvl, b.owner), N = FACTIONS[b.owner].names;
     b.level = lvl; b.maxHp += UP.hp || 150; b.hp += UP.hp || 150; b.armor += UP.armor || 0;
     if (b.owner === PLAYER) sfx('complete');
     if (b.owner === PLAYER) toast(UP.income ? nameOf(b) + ' ready: +' + UP.income + ' gold every ' + UP.every + 's'
                                 : b.type === 'townhall' ? nameOf(b) + ' complete! ' + (lvl === 2 ? N.stable : N.temple) + ' and new research unlocked.'
+                                : b.type === 'tower' && towerTier(b) === 1 && !isOrc(b.owner) ? nameOf(b) + ' complete: it now shoots enemies.'
                                 : nameOf(b) + ' complete: more health, damage and range.');
     return;
   }
@@ -2267,22 +2314,24 @@ function updateBuilding(b, dt){
   if (!spot) return;
   const u = spawnUnit(q.type, b.owner, (spot.x + .5) * TILE, (spot.y + .5) * TILE);
   if (b.rally) orderMove([u], b.rally.x, b.rally.y);
+  else if (q.type === 'worker'){ const t = findWork(b, 'gold'); if (t) orderGather(u, t); }   // new workers go straight to work
   if (b.owner === PLAYER){ toast(nameOf(u) + ' ready'); sfx('ready', .8); }
 }
 
 
 function towerDamage(b){
   const up = G.players[b.owner].up, BT = BUILDING_TYPES[b.type];
-  return BT.attack.damage + (up.fletching ? 2 : 0) + (up.fletching2 ? 2 : 0) + (up.ballistics ? 4 : 0) + (b.level > 1 ? BT.upgrade.damage : 0);
+  return BT.attack.damage + (up.fletching ? 2 : 0) + (up.fletching2 ? 2 : 0) + (up.ballistics ? 4 : 0) + (towerTier(b) >= 2 ? BT.upgrade.damage : 0);
 }
 function towerRange(b){
   const BT = BUILDING_TYPES[b.type];
-  return BT.attack.range + (b.level > 1 && BT.upgrade ? BT.upgrade.range || 0 : 0) + (G.players[b.owner].up.eagleeye ? 2 : 0);
+  return BT.attack.range + (towerTier(b) >= 2 && BT.upgrade ? BT.upgrade.range || 0 : 0) + (G.players[b.owner].up.eagleeye ? 2 : 0);
 }
 
 // A tower is a building that behaves a bit like a unit: it has a cooldown
 // and shoots the nearest enemy in range.
 function towerAttack(b, dt){
+  if (towerTier(b) === 0) return;                             // a watch tower only watches
   b.cd = (b.cd || 0) - dt;
   if (b.cd > 0) return;
   const A = BUILDING_TYPES[b.type].attack, r = rectOf(b);
@@ -2330,7 +2379,7 @@ function effRange(u){
   const up = G.players[u.owner].up;
   return T.range + (isRangedInfantry(u.type) ? (up.longbows ? 1.5 : 0) + (up.eagleeye ? 1 : 0) : 0);
 }
-const carryCap = u => G.players[u.owner].up.tools ? 15 : 10;
+const carryCap = u => { const up = G.players[u.owner].up; return up.tools2 ? 20 : up.tools ? 15 : 10; };
 
 function strike(u, t){
   const T = UNIT_TYPES[u.type];
@@ -2869,7 +2918,7 @@ function updateFog(){
   };
   for (const u of G.units) if (allied(PLAYER, u.owner)) mark(u.x / TILE, u.y / TILE, UNIT_TYPES[u.type].sight);   // allies share vision
   for (const b of G.buildings) if (allied(PLAYER, b.owner))
-    mark(b.tx + b.size / 2, b.ty + b.size / 2, BUILDING_TYPES[b.type].sight + b.size / 2 + (b.type === 'tower' && b.level > 1 ? 2 : 0));
+    mark(b.tx + b.size / 2, b.ty + b.size / 2, BUILDING_TYPES[b.type].sight + b.size / 2 + (towerTier(b) >= 2 ? 2 : 0) + (b.type === 'tower' && !isOrc(b.owner) ? 4 : 0));   // Kingdom towers see far
   updateFogTexture();      // copy the result into the small fog picture (section 12)
 }
 const isVisibleTile = (x, y) => inBounds(x, y) && G.visible[idx(x, y)] === 1;
@@ -3060,6 +3109,11 @@ function aiThink(me = ENEMY){
   }
 
   // Upgrade farms one at a time once there's spare gold.
+  // Kingdom watch towers only shoot once upgraded to Guard towers.
+  for (const t of blds) if (t.type === 'tower' && t.built >= 1 && towerTier(t) === 0 && !t.queue.length && P.gold > 120) tryUpgrade(t);
+  // Orcs keep a goblin scout roaming the map.
+  if (factionKey(me) === 'orcs' && G.time > 45 && hall && hall.built >= 1 && !hall.queue.length && !units.some(u => u.type === 'scout')) tryTrain(hall, 'scout');
+  for (const sc of units) if (sc.type === 'scout' && !sc.order){ const t = nearestFreeTile(4 + Math.floor(Math.random() * (MAP_W - 8)), 4 + Math.floor(Math.random() * (MAP_H - 8))); orderMove([sc], (t.x + .5) * TILE, (t.y + .5) * TILE); }
   if (G.time > 300 && P.gold > 300 && !blds.some(b => b.queue.some(q => q.upgrade))){
     const f = blds.find(b => b.type === 'farm' && b.built >= 1 && b.level < 2 && !b.queue.length);
     if (f) tryUpgrade(f);
@@ -3218,6 +3272,7 @@ function aiMicro(me, army, hall){
 
 function aiBuild(me, type, workers, near){
   if (!techAllows('building', type)) return;
+  if (G.mission && MISSIONS[G.mission.key].setup.noBuild) return;       // some missions forbid the enemy to build
   const BT = BUILDING_TYPES[type];
   if (!canAfford(me, BT.cost)) return;
   const anchor = near || G.buildings.find(b => b.owner === me && b.type === 'townhall') || G.buildings.find(b => b.owner === me);
@@ -3400,6 +3455,7 @@ function drawChunk(cv, cx, cy){
   withCtx(c, () => {
     for (let y = y0; y < y0 + CHUNK; y++)
       for (let x = x0; x < x0 + CHUNK; x++) drawGround(x, y);
+    drawTerrainShapes(x0 - 1, y0 - 1, x0 + CHUNK, y0 + CHUNK);   // dirt and water as smooth shapes (the tiles just around too)
     // Forests go on top. We include the tiles just around the chunk, because
     // canopies, trunks and shadows reach a little way into neighbouring tiles.
     drawForest(x0 - 1, y0 - 1, x0 + CHUNK, y0 + CHUNK);
@@ -3409,7 +3465,6 @@ function drawChunk(cv, cx, cy){
 
 function drawGround(x, y){
   const i = idx(x, y), t = G.terrain[i], px = x * TILE, py = y * TILE, h = hash(x, y);
-  if (t === T_WATER){ drawWater(x, y, px, py); return; }
   const treeAt = (nx, ny) => inBounds(nx, ny) && G.terrain[idx(nx, ny)] === T_TREE;
   // One base colour for all grass (per-tile shades made a visible checkerboard);
   // scattered specks give texture instead.
@@ -3463,12 +3518,99 @@ function drawGround(x, y){
     const fx = px + 8 + Math.floor(hash(x, y * 2) * 14);
     box(fx, py + 14, 5, 3, '#8f897d'); box(fx + 1, py + 14, 3, 1, '#bdb8ae');
   }
-  if (t === T_DIRT) drawDirt(x, y, px, py);
   if (G.stump[i]){
     box(px + 12, py + 17, 9, 7, '#5a3c22'); box(px + 13, py + 17, 7, 3, '#c79a62'); box(px + 15, py + 18, 3, 1, '#a0764a');
     box(px + 8, py + 24, 2, 1, '#c79a62'); box(px + 23, py + 22, 2, 1, '#c79a62');
   }
 }
+
+// LESSON: Smooth terrain edges. Dirt and water used to be drawn tile by tile,
+// so their edges followed the square grid. Now each is drawn as ONE shape:
+// every tile of that terrain adds a square whose outer corners are rounded
+// (where both neighbours on that corner are different terrain), and whose
+// exposed sides can be pulled in or pushed out ("inset"). Layering the same
+// shape at different insets gives a sandy shore, wet sand and water; small
+// bumps along exposed sides make the outline irregular and natural.
+const terrainIs = t => (x, y) => G.terrain[idx(clamp(x, 0, MAP_W - 1), clamp(y, 0, MAP_H - 1))] === t;
+function blobTile(g, x, y, isT, inset, r){
+  const px = x * TILE, py = y * TILE, T = TILE;
+  const n = isT(x, y - 1), s = isT(x, y + 1), w = isT(x - 1, y), e = isT(x + 1, y);
+  const L = px + (w ? 0 : inset), R = px + T - (e ? 0 : inset), Tp = py + (n ? 0 : inset), B = py + T - (s ? 0 : inset);
+  const tl = !n && !w ? r : 0, tr = !n && !e ? r : 0, br = !s && !e ? r : 0, bl = !s && !w ? r : 0;
+  g.moveTo(L + tl, Tp); g.lineTo(R - tr, Tp); if (tr) g.arcTo(R, Tp, R, Tp + tr, tr);
+  g.lineTo(R, B - br); if (br) g.arcTo(R, B, R - br, B, br);
+  g.lineTo(L + bl, B); if (bl) g.arcTo(L, B, L, B - bl, bl);
+  g.lineTo(L, Tp + tl); if (tl) g.arcTo(L, Tp, L + tl, Tp, tl);
+  g.closePath();
+}
+function blobPath(xa, ya, xb, yb, isT, inset, r){
+  ctx.beginPath();
+  for (let y = ya; y <= yb; y++) for (let x = xa; x <= xb; x++) if (inBounds(x, y) && isT(x, y)) blobTile(ctx, x, y, isT, inset, r);
+}
+// Little round bumps along the exposed sides, so an edge is never a ruler-straight line.
+function blobBumps(xa, ya, xb, yb, isT, inset, color){
+  ctx.fillStyle = color;
+  for (let y = ya; y <= yb; y++) for (let x = xa; x <= xb; x++){
+    if (!inBounds(x, y) || !isT(x, y)) continue;
+    const px = x * TILE, py = y * TILE;
+    for (const [dx, dy] of DIRS){
+      if (isT(x + dx, y + dy)) continue;
+      for (let k = 0; k < 3; k++){                              // small bumps, tucked into the edge
+        const h = hash(x * 7 + dx * 3 + k, y * 5 + dy * 11 + k), along = 5 + k * 9 + h * 6, rad = 1.5 + h * 2;
+        const ex = dx === 0 ? px + along : dx > 0 ? px + TILE - inset : px + inset;
+        const ey = dy === 0 ? py + along : dy > 0 ? py + TILE - inset : py + inset;
+        ctx.beginPath(); ctx.arc(ex, ey, rad, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }
+}
+function drawTerrainShapes(xa, ya, xb, yb){
+  // Each shape is built from one square per tile, so outlining it would also
+  // outline every tile inside. Instead the outline is drawn FIRST and the
+  // shape is filled on top: the fill hides the inner lines and half of the
+  // outer line, leaving a clean edge only around the outside.
+  const D = terrainIs(T_DIRT);
+  blobPath(xa, ya, xb, yb, D, 2, 11); ctx.strokeStyle = 'rgba(70,48,24,.45)'; ctx.lineWidth = 3; ctx.stroke();
+  blobBumps(xa, ya, xb, yb, D, 3, '#8b6a42');
+  blobPath(xa, ya, xb, yb, D, 2, 11); ctx.fillStyle = '#8b6a42'; ctx.fill();
+  // Inside corners: where a non-dirt tile has dirt on two sides of a corner, fill
+  // a curved wedge of dirt there, so grass patches get rounded corners too.
+  ctx.beginPath();
+  for (let y = ya; y <= yb; y++) for (let x = xa; x <= xb; x++){
+    if (!inBounds(x, y) || D(x, y)) continue;
+    const px = x * TILE, py = y * TILE, r = 11;
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]){
+      if (!D(x + sx, y) || !D(x, y + sy) || !D(x + sx, y + sy)) continue;
+      const cx = sx < 0 ? px : px + TILE, cy = sy < 0 ? py : py + TILE;      // the corner point
+      ctx.moveTo(cx, cy); ctx.lineTo(cx - sx * r, cy);
+      ctx.arc(cx - sx * r, cy - sy * r, r, sy > 0 ? Math.PI / 2 : -Math.PI / 2, sx > 0 ? 0 : Math.PI, sx * sy > 0);   // the short 90-degree curve
+      ctx.closePath();
+    }
+  }
+  ctx.fill();
+  ctx.save(); blobPath(xa, ya, xb, yb, D, 2, 11); ctx.clip();
+  for (let y = ya; y <= yb; y++) for (let x = xa; x <= xb; x++) if (inBounds(x, y) && D(x, y)) drawDirt(x, y, x * TILE, y * TILE);
+  ctx.restore();
+  for (let y = ya; y <= yb; y++) for (let x = xa; x <= xb; x++){           // grass tufts spilling over the edge
+    if (!inBounds(x, y) || !D(x, y)) continue;
+    for (const [dx, dy] of DIRS){
+      if (D(x + dx, y + dy) || G.terrain[idx(clamp(x + dx, 0, MAP_W - 1), clamp(y + dy, 0, MAP_H - 1))] === T_WATER) continue;
+      const h = hash(x * 3 + dx, y * 3 + dy), px = x * TILE, py = y * TILE;
+      const tx = dx === 0 ? px + 6 + h * 20 : dx > 0 ? px + TILE - 3 : px + 1, ty = dy === 0 ? py + 6 + h * 20 : dy > 0 ? py + TILE - 3 : py + 1;
+      box(tx, ty, 1, 3, '#78a84b'); box(tx + 2, ty - 1, 1, 3, '#6d9c45');
+    }
+  }
+  // Water: sandy shore, wet sand, a line of foam, then the water on top.
+  const W = terrainIs(T_WATER);
+  blobBumps(xa, ya, xb, yb, W, -3, '#c8b27a');
+  blobPath(xa, ya, xb, yb, W, -5, 15); ctx.fillStyle = '#c8b27a'; ctx.fill();
+  blobPath(xa, ya, xb, yb, W, -1, 12); ctx.fillStyle = '#a68f5c'; ctx.fill();
+  blobPath(xa, ya, xb, yb, W, 2, 10); ctx.strokeStyle = 'rgba(217,235,241,.85)'; ctx.lineWidth = 3; ctx.stroke();
+  ctx.save(); blobPath(xa, ya, xb, yb, W, 2, 10); ctx.clip();
+  for (let y = ya; y <= yb; y++) for (let x = xa; x <= xb; x++) if (inBounds(x, y) && W(x, y)) drawWater(x, y, x * TILE, y * TILE);
+  ctx.restore();
+}
+
 
 function drawDirt(x, y, px, py){
   box(px, py, TILE, TILE, '#8b6a42');
@@ -3482,17 +3624,6 @@ function drawDirt(x, y, px, py){
   for (let k = 0; k < 7; k++){
     const a = hash(x * 17 + k, y * 5 + k * 7), b = hash(y * 19 + k, x * 3);
     box(px + Math.floor(a * 29), py + Math.floor(b * 29), k % 2 ? 3 : 2, 2, k % 3 === 0 ? '#9e7c50' : '#76583a');
-  }
-  // Grass creeps over the edge wherever the neighbour is grass, so paths
-  // blend into the fields instead of ending in a hard line.
-  const soft = (nx, ny) => inBounds(nx, ny) && G.terrain[idx(nx, ny)] !== T_DIRT && G.terrain[idx(nx, ny)] !== T_WATER;
-  const g = '#5a8436';
-  for (let k = 0; k < TILE; k += 2){
-    const d = 1 + Math.floor(hash(px + k, py + 3) * 4);
-    if (soft(x, y - 1)) box(px + k, py, 2, d, g);
-    if (soft(x, y + 1)) box(px + k, py + TILE - d, 2, d, g);
-    if (soft(x - 1, y)) box(px, py + k, d, 2, g);
-    if (soft(x + 1, y)) box(px + TILE - d, py + k, d, 2, g);
   }
 }
 
@@ -3531,14 +3662,6 @@ function drawWater(x, y, px, py){
     const a = hash(x * 11 + k, y * 3 + k);
     box(px + Math.floor(a * 22), py + 4 + k * 7, 5 + Math.floor(a * 6), 1, '#3b75a8');
   }
-  const sand = '#c8b27a', wet = '#a68f5c', foam = '#d9ebf1';
-  if (land(x, y - 1)){ box(px, py, TILE, 4, sand); box(px, py + 4, TILE, 1, wet); box(px, py + 5, TILE, 1, foam); }
-  if (land(x, y + 1)){ box(px, py + TILE - 4, TILE, 4, sand); box(px, py + TILE - 5, TILE, 1, wet); box(px, py + TILE - 6, TILE, 1, foam); }
-  if (land(x - 1, y)){ box(px, py, 4, TILE, sand); box(px + 4, py, 1, TILE, wet); box(px + 5, py, 1, TILE, foam); }
-  if (land(x + 1, y)){ box(px + TILE - 4, py, 4, TILE, sand); box(px + TILE - 5, py, 1, TILE, wet); box(px + TILE - 6, py, 1, TILE, foam); }
-  for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]])  // outer corners
-    if (land(x + dx, y + dy) && !land(x + dx, y) && !land(x, y + dy))
-      box(dx < 0 ? px : px + TILE - 5, dy < 0 ? py : py + TILE - 5, 5, 5, sand);
 }
 
 // LESSON: Warcraft-2-style forests. Instead of drawing each tree on its own,
@@ -3563,7 +3686,6 @@ const LEAF = {   // [shadow, body, highlight] colours per species
 const PINE = { outline:'#0b170c', dark:'#1c3b1f', mid:'#2e5e32', light:'#448a46', tip:'#6fb45a', floor:'#1d361e', trunk:'#4a3120', trunkLit:'#65432a' };
 function drawPine(g, cx, base, s, showTrunk){
   const P = (pts, col) => { g.fillStyle = col; g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]); g.closePath(); g.fill(); };
-  g.fillStyle = 'rgba(8,16,8,.45)'; g.beginPath(); g.ellipse(cx + 3 * s, base + 1 * s, 13 * s, 4.5 * s, 0, 0, Math.PI * 2); g.fill();   // shadow
   if (showTrunk){ g.fillStyle = PINE.trunk; g.fillRect(cx - 2.5 * s, base - 6 * s, 5 * s, 7 * s); g.fillStyle = PINE.trunkLit; g.fillRect(cx - 2.5 * s, base - 6 * s, 1.5 * s, 7 * s); }
   for (let i = 0; i < 4; i++){                                   // four tiers, widest at the bottom
     const w = (18 - i * 3.8) * s, yb = base - (6 + i * 8) * s, yt = yb - 13 * s;
@@ -3581,9 +3703,6 @@ function drawPine(g, cx, base, s, showTrunk){
 }
 function drawForest(xa, ya, xb, yb){
   const isTree = (x, y) => inBounds(x, y) && G.terrain[idx(x, y)] === T_TREE;
-  ctx.fillStyle = PINE.floor;                                    // dark forest floor, so gaps look like deep forest
-  for (let y = ya; y <= yb; y++) for (let x = xa; x <= xb; x++)
-    if (isTree(x, y)){ ctx.beginPath(); ctx.ellipse(x * TILE + 16, y * TILE + 18, 20, 18, 0, 0, Math.PI * 2); ctx.fill(); }
   for (let y = ya; y <= yb; y++)                                 // back rows first, so front rows overlap them
     for (let x = xa; x <= xb; x++){
       if (!isTree(x, y)) continue;
@@ -3597,6 +3716,15 @@ function drawForest(xa, ya, xb, yb){
 
 // Little glints that drift across visible water every frame.
 function drawWaterShimmer(x0, y0, x1, y1){
+  // Gentle ripples drifting across the water.
+  ctx.strokeStyle = 'rgba(210,235,250,.22)'; ctx.lineWidth = 1;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++){
+    if (G.terrain[idx(x, y)] !== T_WATER) continue;
+    const h = hash(x * 5, y * 3), ph = (animT * .35 + h) % 1, rx = x * TILE + 4 + ph * 22, ry = y * TILE + 10 + h * 12;
+    ctx.globalAlpha = Math.sin(ph * Math.PI);
+    ctx.beginPath(); ctx.moveTo(rx, ry); ctx.quadraticCurveTo(rx + 3, ry - 2, rx + 7, ry); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
   ctx.fillStyle = 'rgba(225,242,255,.28)';
   for (let y = y0; y <= y1; y++)
     for (let x = x0; x <= x1; x++){
@@ -3694,19 +3822,27 @@ function unitSprite(u, swing){
 }
 
 const BLD_PAD_X = 10, BLD_PAD_TOP = 34;    // room around a building for flags and outlines
+// A watch tower's lit beacon on top.
+function watchBeacon(px, py, s){
+  const cx = px + s / 2, y = py - 6;
+  disc(ctx, cx, y, 8, 'rgba(255,190,70,.3)');
+  box(cx - 4, y + 2, 8, 3, '#5a3f29'); box(cx - 3, y - 2, 6, 4, '#ff9a3a'); box(cx - 2, y - 4, 4, 3, '#ffcf5a'); box(cx - 1, y - 5, 2, 2, '#fff1a6');
+}
 function buildingSprite(type, owner, level){
   const key = artStyle + 'b' + type + owner + level;
   let c = spriteCache.get(key);
   if (!c){
     const s = BUILDING_TYPES[type].size * TILE, w = s + BLD_PAD_X * 2, h = s + BLD_PAD_TOP + 4, F = FACTIONS[owner];
     c = artStyle === 'painted'
-      ? paintedCanvas(w, h, () => { (PAINTED_BUILDINGS[type] || BUILDING_ART[type])(BLD_PAD_X, BLD_PAD_TOP, s, F, level); if (level > 2 && type === 'townhall') citadelArt(BLD_PAD_X, BLD_PAD_TOP, s, F); })
+      ? paintedCanvas(w, h, () => { (PAINTED_BUILDINGS[type] || BUILDING_ART[type])(BLD_PAD_X, BLD_PAD_TOP, s, F, type === 'tower' && !F.horns ? Math.max(1, level - 1) : level);
+          if (type === 'tower' && !F.horns && level === 1) watchBeacon(BLD_PAD_X, BLD_PAD_TOP, s); if (level > 2 && type === 'townhall') citadelArt(BLD_PAD_X, BLD_PAD_TOP, s, F); })
       : outlined(w, h, () => {
           BUILDING_ART[type](BLD_PAD_X, BLD_PAD_TOP, s, F, level);
-          if (level > 1 && type === 'farm') farmUpgradeArt(BLD_PAD_X, BLD_PAD_TOP, s);
+          if (level > 1 && type === 'farm' && !F.horns) farmUpgradeArt(BLD_PAD_X, BLD_PAD_TOP, s);   // (the pig farm shows its upgrade with more pigs)
           if (level > 1 && type === 'townhall') townhallUpgradeArt(BLD_PAD_X, BLD_PAD_TOP, s, F);
           if (level > 2 && type === 'townhall') citadelArt(BLD_PAD_X, BLD_PAD_TOP, s, F);
-          if (level > 1 && type === 'tower') towerUpgradeArt(BLD_PAD_X, BLD_PAD_TOP, s, F);
+          if (type === 'tower' && (F.horns ? level : level - 1) >= 2) towerUpgradeArt(BLD_PAD_X, BLD_PAD_TOP, s, F);
+          if (type === 'tower' && !F.horns && level === 1) watchBeacon(BLD_PAD_X, BLD_PAD_TOP, s);
         });
     spriteCache.set(key, c);
   }
@@ -3990,6 +4126,7 @@ const SPRITES = {
     if (!F.horns){ box(x - 5, y - 14, 10, 2, '#2a3670'); box(x - 3, y - 17, 6, 3, '#2a3670'); box(x - 2, y - 20, 4, 3, '#2a3670'); box(x - 1, y - 22, 2, 2, '#2a3670'); box(x - 1, y - 17, 2, 2, '#e0b84a'); }
     const sx = x + fc * 8; box(sx - 3, y - 19, 6, 5, '#b98aff'); box(sx - 1, y - 18, 2, 2, '#ffffff');
   },
+  scout(x, y, fc, F, u, sw){ rigSide('scout', x, y, fc, F, u, sw); },
   healer(x, y, fc, F, u, sw){
     if (F.horns) return rigSide('healer', x, y, fc, F, u, sw);                     // the goblin alchemist
     SPRITES.priest(x, y, fc, F, u, sw, F.horns ? '#5a4632' : '#f2ecd8');
@@ -4084,6 +4221,43 @@ function roof(pts, F){
 // A small team flag on a pole.
 function flag(x, y, F){ box(x, y, 2, 18, '#3a2a1a'); box(x + 2, y, 11, 7, F.color); box(x + 2, y + 6, 11, 1, F.dark); box(x + 2, y, 11, 1, F.light); }
 
+// The orc farm: a big round hide hut in a log-fenced, muddy pen full of pigs.
+function pigFarm(px, py, s, F, level = 1){
+  const E = (x, y, rx, ry, c) => { ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); };
+  // trampled mud
+  E(px + s / 2, py + s - 16, s / 2 - 2, 15, '#6b5234'); E(px + 14, py + s - 10, 9, 4, '#5a4128'); E(px + s - 16, py + s - 20, 7, 3, '#5a4128');
+  // the hut: a big dome of stitched hides
+  const hx = px + s / 2 + 4, hy = py + 30;
+  E(hx + 2, hy + 14, 22, 6, 'rgba(0,0,0,.25)');
+  E(hx, hy + 4, 21, 17, '#5e4630'); E(hx, hy + 2, 19, 16, '#8a6a44'); E(hx - 5, hy - 3, 10, 8, '#a07e54');
+  for (const a of [-12, -4, 4, 12]){ ctx.strokeStyle = '#4a3522'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(hx + a * .6, hy - 13); ctx.quadraticCurveTo(hx + a * 1.2, hy + 2, hx + a, hy + 16); ctx.stroke(); }
+  box(hx - 3, hy - 17, 6, 3, '#2a1d12');                                                         // smoke hole
+  E(hx + 3, hy - 21, 3, 2.5, 'rgba(150,145,140,.55)'); E(hx + 6, hy - 25, 2.5, 2, 'rgba(150,145,140,.4)');
+  E(hx, hy + 12, 5.5, 6.5, '#1f140b'); box(hx - 6, hy + 12, 12, 7, '#1f140b');                  // doorway
+  box(hx - 8, hy + 8, 2, 8, '#e6dcc4'); box(hx + 6, hy + 8, 2, 8, '#e6dcc4');                   // tusks by the door
+  box(hx + 15, hy - 22, 1, 16, '#4a3321'); box(hx + 16, hy - 22, 6, 4, F.color);               // clan banner
+  // log fence around the pen
+  const fy0 = py + 34, fy1 = py + s - 3;
+  for (let x = px + 2; x <= px + s - 3; x += 6){ box(x, fy1 - 5, 2, 6, '#6b4a2b'); }
+  box(px + 2, fy1 - 4, s - 4, 1, '#8a6a48'); box(px + 2, fy1 - 2, s - 4, 1, '#6b4a2b');
+  for (let y = fy0; y <= fy1 - 4; y += 6){ box(px + 1, y, 2, 5, '#6b4a2b'); box(px + s - 3, y, 2, 5, '#6b4a2b'); }
+  box(px + 1, fy0, 1, fy1 - fy0, '#8a6a48'); box(px + s - 2, fy0, 1, fy1 - fy0, '#8a6a48');
+  // trough
+  box(px + 5, py + s - 17, 12, 4, '#5a3f29'); box(px + 6, py + s - 16, 10, 1, '#9db244');
+  // pigs: pink bodies, dark spots, a snout and an ear
+  const pig = (x, y, f, muddy) => {
+    const c = muddy ? '#b98a78' : '#e7a8a0';
+    E(x, y, 6, 3.6, '#000000'); E(x, y - .5, 5.5, 3.2, c);
+    E(x + f * 5, y - 1.5, 3, 2.6, c); box(x + f * 7 - (f < 0 ? 1 : 0), y - 1.5, 2, 2, '#c07a7a');   // head and snout
+    box(x + f * 4, y - 4, 2, 2, '#d88f88');                                                     // ear
+    box(x - 3, y + 2, 1, 2, '#8a5a52'); box(x + 2, y + 2, 1, 2, '#8a5a52');                      // legs
+    box(x - 1, y - 2, 2, 1, '#6b3a34'); box(x - 3, y, 1, 1, '#6b3a34');                          // spots
+    box(x + f * 6, y - 2.5, 1, 1, '#1a0f07');                                                   // eye
+  };
+  pig(px + 13, py + s - 24, 1, false); pig(px + s - 14, py + s - 11, -1, false); pig(px + 28, py + s - 9, 1, true);
+  if (level > 1){ pig(px + s - 20, py + s - 26, -1, false); pig(px + 10, py + s - 8, 1, true); }   // an upgraded farm has more pigs
+}
+
 const BUILDING_ART = {
   // A wooden cage on a stone floor, with prisoners (in Kingdom blue) behind the bars.
   cage(px, py, s){
@@ -4124,7 +4298,8 @@ const BUILDING_ART = {
       box(tx, py + s - 29, 1, 1, '#1b120b'); box(tx + 2, py + s - 29, 1, 1, '#1b120b');
     }
   },
-  farm(px, py, s, F){
+  farm(px, py, s, F, level){
+    if (F.horns) return pigFarm(px, py, s, F, level);                  // the orcs keep pigs, not fields
     box(px + 2, py + 6, 28, s - 12, '#6a5528');
     for (let y = py + 9; y < py + s - 8; y += 6){
       box(px + 4, y, 24, 2, '#9db244');
@@ -4135,8 +4310,7 @@ const BUILDING_ART = {
     wall(px + 34, py + 30, 26, 26, F);
     roof([[px + 31, py + 33], [px + s - 1, py + 33], [px + 47, py + 13]], F);
     box(px + 43, py + 43, 8, 13, '#2e1d10'); win(px + 35, py + 38, 6, 6);
-    if (F.horns){ box(px + 50, py + 58, 8, 4, '#e2a0a0'); box(px + 56, py + 58, 2, 2, '#c07a7a'); }   // pig
-    else { box(px + 52, py + 58, 4, 3, '#f4f1e8'); box(px + 55, py + 57, 1, 1, '#d8452e'); }         // chicken
+    box(px + 52, py + 58, 4, 3, '#f4f1e8'); box(px + 55, py + 57, 1, 1, '#d8452e');                 // chicken
   },
   barracks(px, py, s, F){
     wall(px + 6, py + 38, s - 12, s - 44, F);
@@ -4899,6 +5073,7 @@ const PAINTED_GRIM = {
       pEll(x, y - 13, 8, 1.8, '#26325f', 0, 1); pEll(x - fc * .5, y - 18, 1.2, 1.2, '#e0b84a', 0, .6);
     } else { for (let k = -1; k <= 1; k++) pEll(x + k * 3, y - 6.4, .9, .9, '#efe6cf', 0, .5); }   // bone charms
   },
+  scout(x, y, fc, F, u, sw){ rigSide('scout', x, y, fc, F, u, sw); },
   healer(x, y, fc, F, u, sw){
     if (F.horns) return rigSide('healer', x, y, fc, F, u, sw);                     // the goblin alchemist
     scaled(x, y, 1.15, () => PAINTED.priest(x, y, fc, F, u, sw, F.horns ? '#4e3e2e' : '#f2ecd8', F.horns ? 'totem' : 'staff'));
@@ -5062,6 +5237,7 @@ const PAINTED_BUILDINGS = {
     }
   },
   farm(px, py, s, F, level){
+    if (F.horns) return pigFarm(px, py, s, F, level);                  // the orcs keep pigs, not fields
     pRect(px + 2, py + 6, 30, s - 12, 3, lin(px, py, px + 30, py + s, '#7a6230', .15));
     for (let yy = py + 11; yy < py + s - 8; yy += 6)
       for (let xx = px + 6; xx < px + 30; xx += 5){ ctx.fillStyle = level > 1 ? '#e8c84e' : '#8cb040'; ctx.beginPath(); ctx.ellipse(xx, yy, 2, 1.6, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.fillRect(xx - 1, yy - 1, 1, .8); }
@@ -5479,6 +5655,7 @@ function classicParts(type, F, u){
     case 'priest': return orc
       ? { ...P, robe:true, cloth:'#5a4632', tabard:F.color, helm:'skull', weapon:'totem' }
       : { ...P, robe:true, cloth:'#e6dfcc', tabard:F.color, helm:'hood', hood:'#e6dfcc', weapon:'staff' };
+    case 'scout': return { ...P, skin:'#86b84e', cloth:'#5a4632', tabard:'#8a6a44', kilt:'#4a3a2a', pants:'#4a3a2a', longEars:true, nose:true, bigHead:true, tusks:false, helm:'goggles', weapon:'sword' };
     case 'healer': return orc
       ? { ...P, skin:'#86b84e', cloth:'#7a5536', tabard:'#e2cf9a', kilt:'#4a3a2a', pants:'#4a3a2a', longEars:true, nose:true, bigHead:true, tusks:false, helm:'goggles', weapon:'flask', carry:'bottles' }
       : { ...P, big:1, robe:true, cloth:'#efe8d6', tabard:'#e0b84a', helm:'crown', weapon:'staff', cape:shade(F.color, -.2) };
@@ -6464,6 +6641,8 @@ function pickAt(wx, wy){
   const id = G.blocked[idx(tx, ty)];
   if (id) return G.buildings.find(b => b.id === id) || G.mines.find(m => m.id === id) || null;
   if (G.terrain[idx(tx, ty)] === T_TREE) return { tree:true, x:tx, y:ty };
+  // Pines are tall: their branches hang over the lower part of the tile above, so a tap there means that tree.
+  if (inBounds(tx, ty + 1) && G.terrain[idx(tx, ty + 1)] === T_TREE && wy / TILE - ty > .3) return { tree:true, x:tx, y:ty + 1 };
   return null;
 }
 
@@ -7774,8 +7953,10 @@ const MISSIONS = {
     brief:'An orc warband is gathering across the river. The fords are the only way over. Fortify them, then hold the line until our reinforcements arrive.',
     setup:{ map:'rivers', size:'small', faction:'kingdom', enemyBase:false, creeps:false, gold:900, wood:500, extra:() => { giveHero(2); } },
     steps:[
-      { text:N => `Build 2 ${plural(N.tower)}`, need:2, count:() => countBuilt('tower'),
-        hint:N => `${plural(N.tower)} shoot enemies on their own. Build them near the fords on your side of the river (see the minimap).` },
+      { text:N => `Build 2 ${plural(isOrc(PLAYER) ? N.tower : N.tower2)}`, need:2,
+        count:() => G.buildings.filter(b => b.owner === PLAYER && b.type === 'tower' && b.built >= 1 && towerTier(b) >= 1).length,
+        hint:N => isOrc(PLAYER) ? `${plural(N.tower)} shoot enemies on their own. Build them near the fords on your side of the river (see the minimap).`
+                                : 'Build Watch towers near the fords, then upgrade each one to a Guard tower so it shoots. Watch towers alone only see.' },
       { text:() => 'Hold the fords', survive:360,
         hint:() => 'Enemy waves will cross every minute, each larger than the last. Keep training soldiers and repair your towers between waves.',
         tick:() => {
@@ -7855,13 +8036,13 @@ const MISSIONS = {
 // build menu, training, research, upgrades and the AI alike.
 const TECH_UNLOCKS = [
   null,
-  { units:['worker', 'footman'], buildings:['townhall', 'farm', 'barracks'], research:[] },                               // 1
+  { units:['worker', 'footman', 'scout'], buildings:['townhall', 'farm', 'barracks'], research:[] },                               // 1
   { units:['archer', 'javelin', 'hero'], buildings:['lumbermill', 'tower'], research:['fletching', 'tools'] },           // 2
   { buildings:['blacksmith', 'market'], research:['weapons', 'armor', 'toughness', 'shields', 'pillage'] },             // 3
   { research:['longbows', 'masonry'], upgrades:['tower', 'farm'] },                                                      // 4
   {},                                                                                                                   // 5
   { units:['knight'], buildings:['stable'], hall:2,
-    research:['weapons2', 'armor2', 'barding', 'masonry2', 'fletching2', 'veterans', 'thickhides', 'discipline', 'marksman', 'berserk', 'ballistics'] },   // 6
+    research:['tools2', 'weapons2', 'armor2', 'barding', 'masonry2', 'fletching2', 'veterans', 'thickhides', 'discipline', 'marksman', 'berserk', 'ballistics'] },   // 6
   { units:['scorpion', 'cannon'] },                                                                                     // 7
   {},                                                                                                                   // 8
   { units:['priest', 'mage', 'healer'], buildings:['temple'], hall:3, all:true },                                      // 9: everything else
@@ -8072,7 +8253,9 @@ function fortify(owner, towers){
       const tx = tileOf(c.x + Math.cos(a) * r * TILE), ty = tileOf(c.y + Math.sin(a) * r * TILE);
       if (canPlace('tower', tx, ty, owner, 0)){
         const t = placeBuilding('tower', owner, tx, ty, true);
-        t.level = 2; t.maxHp += UP.hp; t.hp = t.maxHp; t.armor += UP.armor || 0;
+        if (isOrc(owner)){ t.level = 2; t.maxHp += UP.hp; }
+        else { t.level = 3; t.maxHp += UP.hp + BUILDING_TYPES.tower.guardUp.hp; }        // Kingdom: watch -> guard -> fortified
+        t.hp = t.maxHp; t.armor += UP.armor || 0;
         break;
       }
     }
@@ -8130,14 +8313,22 @@ Object.assign(MISSIONS, {
   raid: {
     name:'Raid the Farms', tech:2,
     brief:'The Kingdom has built farms on clan land. The Warlord leads a raiding party: plunder their gold with Pillage, then burn their Keep to the ground.',
-    setup:{ map:'vale', size:'small', faction:'orcs', enemyBase:true, creeps:false, noBase:true, difficulty:'easy', extra:() => {
+    // noBuild: the Kingdom cannot build or rebuild anything in this mission, so the farms are all there is.
+    setup:{ map:'vale', size:'small', faction:'orcs', enemyBase:true, creeps:false, noBase:true, difficulty:'easy', noBuild:true, extra:() => {
       G.players[PLAYER].up.pillage = true;
-      giveHeroAt(12, 12, 2); spawnSquad(['footman', 'footman', 'footman', 'footman', 'footman', 'javelin', 'javelin'], 12, 15);
-      const hall = G.buildings.find(b => b.owner === ENEMY && b.type === 'townhall');
-      for (const [dx, dy] of [[-6, -1], [5, -3], [-5, 5], [4, 5]]){ const t = openSpot(hall.tx + dx, hall.ty + dy); if (canPlace('farm', t.x, t.y, ENEMY, 0)) placeBuilding('farm', ENEMY, t.x, t.y, true); }
+      giveHeroAt(12, 12, 2); spawnSquad(['footman', 'footman', 'footman', 'footman', 'footman', rangedOf(PLAYER), rangedOf(PLAYER)], 12, 15);
+      const hall = G.buildings.find(b => b.owner === ENEMY && b.type === 'townhall'), c = centerOf(hall);
+      let placed = 0;                                      // about ten farms in rings around the Keep: far more gold than needed
+      for (let r = 5; r <= 12 && placed < 10; r += 2)
+        for (let k = 0; k < 12 && placed < 10; k++){
+          const a = k / 12 * Math.PI * 2 + r, tx = tileOf(c.x + Math.cos(a) * r * TILE) - 1, ty = tileOf(c.y + Math.sin(a) * r * TILE) - 1;
+          if (canPlace('farm', tx, ty, ENEMY, 1)){ placeBuilding('farm', ENEMY, tx, ty, true); placed++; }
+        }
       centerOn(12 * TILE, 13 * TILE); } },
     steps:[
       { text:() => 'Pillage 500 gold', need:500, count:() => Math.floor((G.pillaged || {})[PLAYER] || 0),
+        // Done at 500, or if nothing is left standing to plunder (so the mission can never get stuck).
+        check:() => ((G.pillaged || {})[PLAYER] || 0) >= 500 || !G.buildings.some(b => isSide(b.owner) && hostile(PLAYER, b.owner)),
         hint:() => 'Your warriors steal gold with every hit on an enemy building (Pillage). Farms are poorly defended: strike them first.' },
       { text:() => `Burn the ${BASE_FACTIONS[0].names.townhall}`, count:hostileHalls, countdown:true,
         hint:() => 'Gather your warband and attack the Keep together.' },
@@ -8149,9 +8340,9 @@ Object.assign(MISSIONS, {
     name:'The Alchemist\'s Experiment', tech:3,
     brief:'A goblin alchemist has joined the clans, promising wondrous brews. Nobody knows what his flasks will do, least of all him. Test them on the Kingdom patrols that guard the road.',
     setup:{ map:'vale', size:'small', faction:'orcs', enemyBase:false, creeps:false, noBase:true, extra:() => {
-      const h = giveHeroAt(12, 12, 3, 'healer'); spawnSquad(['footman', 'footman', 'footman', 'footman', 'javelin', 'javelin'], 12, 15);
+      const h = giveHeroAt(12, 12, 3, 'healer'); spawnSquad(['footman', 'footman', 'footman', 'footman', rangedOf(PLAYER), rangedOf(PLAYER)], 12, 15);
       const k = MAP_W / 96, S = v => Math.round(v * k);
-      G.mission.parties = [[S(32), S(34)], [S(58), S(30)], [S(62), S(64)]].map(([x, y]) => spawnGuards(x, y, ['footman', 'footman', 'archer', 'priest']).map(u => u.id));
+      G.mission.parties = [[S(32), S(34)], [S(58), S(30)], [S(62), S(64)]].map(([x, y]) => spawnGuards(x, y, ['footman', 'footman', rangedOf(ENEMY), 'priest']).map(u => u.id));
       centerOn(h.x, h.y); } },
     tick:guardTick,
     steps:[
@@ -8170,7 +8361,7 @@ Object.assign(MISSIONS, {
     setup:{ map:'vale', size:'small', faction:'orcs', enemyBase:false, creeps:false, noBase:true, extra:() => {
       giveHeroAt(12, 12, 3); spawnSquad(['knight', 'knight', 'knight', 'knight', 'knight', 'knight'], 12, 15);
       const k = MAP_W / 96, S = v => Math.round(v * k);
-      G.mission.parties = [[S(20), S(70)], [S(70), S(20)], [S(50), S(55)], [S(80), S(78)]].map(([x, y]) => spawnPatrol(x, y, ['footman', 'archer', 'archer']));
+      G.mission.parties = [[S(20), S(70)], [S(70), S(20)], [S(50), S(55)], [S(80), S(78)]].map(([x, y]) => spawnPatrol(x, y, ['footman', rangedOf(ENEMY), rangedOf(ENEMY)]));
       G.mission.scoutsSeen = true; centerOn(12 * TILE, 13 * TILE); } },
     tick:scoutTick,
     steps:[
@@ -8206,6 +8397,42 @@ Object.assign(MISSIONS, {
   },
 });
 const ORC_CAMPAIGN = ['raid', 'experiment', 'wolves', 'crossing', 'citadel'];
+// Kingdom versions of the orc-only missions, so both campaigns have the same number.
+Object.assign(MISSIONS, {
+  k_raid: { ...MISSIONS.raid, name:'Burn the Pig Pens', tech:2,
+    setup:{ ...MISSIONS.raid.setup, faction:'kingdom', extra:() => {
+      giveHeroAt(12, 12, 2); spawnSquad(['footman', 'footman', 'footman', 'footman', 'footman', 'archer', 'archer'], 12, 15);
+      const hall = G.buildings.find(b => b.owner === ENEMY && b.type === 'townhall');
+      let placed = 0;                                        // always four pens: try more spots if some are blocked
+      for (const [dx, dy] of [[-6, -1], [5, -3], [-5, 5], [4, 5], [7, 2], [-3, -6], [2, -6], [-7, 3], [0, 7], [8, -2]]){
+        if (placed >= 4) break;
+        const t = openSpot(hall.tx + dx, hall.ty + dy); if (canPlace('farm', t.x, t.y, ENEMY, 0)){ placeBuilding('farm', ENEMY, t.x, t.y, true); placed++; }
+      }
+      centerOn(12 * TILE, 13 * TILE); } },
+    steps:[
+      { text:() => `Burn 4 ${plural(FACTIONS[ENEMY].names.farm)}`, need:4, count:() => G.mission.farmsBurned || 0,
+        hint:() => 'The orcs feed their warbands from these pens. They are poorly guarded: strike them before the warriors arrive.' },
+      { text:() => `Burn their ${FACTIONS[ENEMY].names.townhall}`, count:hostileHalls, countdown:true,
+        hint:() => 'Gather your soldiers and attack the hall together.' },
+    ],
+    done:'The pig pens burn and the orc camp goes hungry. It will be a long time before they march again.' },
+  k_experiment: { ...MISSIONS.experiment, name:'The Light\'s Chosen', tech:3,
+    setup:{ ...MISSIONS.experiment.setup, faction:'kingdom' },
+    steps:[
+      { text:() => `Learn ${skillName(PLAYER, 'holylight')}`, check:() => heroesOf(PLAYER).some(h => h.skills.holylight > 0),
+        hint:() => 'Tap Hero, then Skills, and choose Holy light. She will heal your most wounded soldier by herself.',
+        glow:() => heroesOf(PLAYER)[0] },
+      { text:() => 'Defeat the 3 orc patrols', count:partiesLeft, countdown:true,
+        hint:() => 'Keep the High Priestess behind your soldiers: she is fragile, but no one falls while she heals.' },
+    ],
+    done:'The patrols are broken, and not a single soldier was lost to wounds. The Light has chosen well.' },
+  k_wolves: { ...MISSIONS.wolves, name:'Riders of the North', tech:5,
+    setup:{ ...MISSIONS.wolves.setup, faction:'kingdom' },
+    steps:[{ ...MISSIONS.wolves.steps[0], hint:() => 'Knights are fast: use the minimap to search the valleys, and strike each party with all your knights together.' }],
+    done:'Not one orc scout returns home. The clans march blind, and the Kingdom is ready for them.' },
+});
+CAMPAIGN.splice(0, CAMPAIGN.length, 'training', 'kobolds', 'k_raid', 'trial', 'k_experiment', 'race', 'ford', 'k_wolves',
+                'escort', 'laststand', 'woods', 'rescue', 'expedition', 'lairs', 'siege', 'pass');
 // ----- Mission briefings -----
 // LESSON: Story lives in one table, separate from the game logic. Each
 // mission has a region and a briefing addressed to the player, shown on a
@@ -8224,6 +8451,9 @@ const STORY = {
   lairs:      ['The Thornridge Hills', 'Commander, something has stirred the creatures of Thornridge. Tonight their lairs breed twice as fast as before.', 'If they are left alone, their spawn will grow into Ancients strong enough to overrun the vale. Burn ten of the lairs before that happens.'],
   siege:      ['The Warhold', 'Commander, the road to the Frozen Pass is guarded by the Warhold, an orc fortress ringed by fortified towers. No army has ever taken it.', 'But our engineers have built scorpions whose bolts fly farther than any orc tower can shoot. Break the towers, then break the Warhold.'],
   pass:       ['The Frozen Pass', 'Commander, the war chief of the orcs has gathered every clan in the Frozen Pass for a final stand. This battle will decide the fate of the vale.', 'The Commander and the High Priestess lead the army of the Kingdom. Destroy every orc building in the pass, and the war is won.'],
+  k_raid:     ['The Orc Marches', 'Commander, the orcs feed their warbands from pig pens around their war camp, just across the border. Every pen that stands is another warband marching on our villages.', 'Take a small warband across the border. Burn four of their pig pens, then burn their hall, before their warriors can gather.'],
+  k_experiment:['The Chapel Road', 'Commander, a young priestess of the Light has asked to march with the army. Before she does, the Church asks that she proves herself in battle.', 'Orc patrols prowl the road to the chapel. Let her learn Holy light and keep your soldiers standing while you break all three patrols.'],
+  k_wolves:   ['The Northern Valleys', 'Commander, orc scouts are mapping the northern valleys for a raid on our lands. If they return to their clans, the orcs will know every path we use.', 'Take the knights and hunt every scout party down. Let none escape.'],
   o_training: ['The Eastern Marches', 'Warchief, the clans have crossed the river into the human lands. Here, in the Eastern Marches, you will build our first warcamp.', 'Set the laborers to the gold mine, raise pig pens and a war camp, and train warriors. The humans will not ignore us for long.'],
   raid:       ['The Goldmere Farms', 'Warchief, the humans have built their farms on land that belonged to the clans. Their fields are fat and their guards are few.', 'Lead the raiding party: plunder their farms until our coffers hold five hundred gold, then burn their Keep to the ground.'],
   o_kobolds:  ['The Greyhollow Hills', 'Warchief, the hills around our new mines are crawling with beasts, and their lairs breed more every day.', 'Take the Warlord and hunt them down. Burn the lairs, so the mines can work in peace. Beware: human riders have been seen spying from the far hills.'],

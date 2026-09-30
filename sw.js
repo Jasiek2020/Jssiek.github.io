@@ -11,7 +11,7 @@
 
    To ship an update: change VERSION below. Phones then download the new
    files and throw the old copy away. */
-const VERSION = 'bov-v5';
+const VERSION = 'bov-v14';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png',
                './icon-maskable-512.png', './apple-touch-icon.png'];
 
