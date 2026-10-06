@@ -39,6 +39,13 @@ jobs:
             cp assets/icon-192.png $RES/mipmap-$d/ic_launcher_round.png
           done
 
+      # Always sign with the same key (debug.keystore in this repository), so a new
+      # APK installs over the previous one as an update and saved games are kept.
+      - name: Use the project's fixed signing key
+        run: |
+          mkdir -p ~/.android
+          cp debug.keystore ~/.android/debug.keystore
+
       - name: Build the APK
         run: |
           cd android
