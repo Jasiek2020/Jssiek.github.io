@@ -1,0 +1,8 @@
+{
+  "appId": "com.bannersofthevale.game",
+  "appName": "Banners of the Vale",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#1a120b"
+  }
+}

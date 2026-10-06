@@ -4,14 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Banners of the Vale</title>
-<link rel="manifest" href="manifest.json">
-<link rel="icon" type="image/png" href="icon-192.png">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="theme-color" content="#3d2a19">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Banners">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&display=swap" rel="stylesheet">
@@ -137,6 +129,9 @@ body.tab-port #objBox{ max-width:calc(100% - 210px); font-size:15px; }
 #idleBtn{ position:absolute; left:10px; bottom:10px; width:54px; height:54px; padding:2px; border:2px solid var(--brass);
   background:#141009; box-shadow:0 0 0 1px #000; }
 #idleBtn[hidden]{ display:none; }
+/* Upkeep: the food counter turns amber (low) or red (high). */
+#foodBox.upLow{ color:#f0b44a; } #foodBox.upHigh{ color:#ff6a4d; }
+#foodBox.upLow::after{ content:' ▾70%'; font-size:10px; } #foodBox.upHigh::after{ content:' ▾40%'; font-size:10px; }
 /* Attack-move: arm it, then tap the ground. It sits above the idle-worker button. */
 #amBtn{ position:absolute; left:10px; bottom:74px; width:54px; height:54px; padding:0; border:2px solid var(--brass);
   background:#2a1b10; color:var(--parch); box-shadow:0 0 0 1px #000; font-size:22px; line-height:1; display:flex; flex-direction:column; align-items:center; justify-content:center; }
@@ -249,7 +244,7 @@ body.editing #cmds{ grid-auto-rows:auto; gap:3px; }
 body.editing #cmds button{ min-height:0; height:auto; padding:5px 2px; font-size:11px; line-height:1.15; }
 body.editing #info h2{ margin:0 0 2px; font-size:15px; }
 body.editing #info .hint{ font-size:11px; }
-.edrow button{ padding:3px 8px; font-size:12px; }
+.edrow button{ padding:3px 6px; font-size:11px; }
 .menu-col{ display:flex; flex-direction:column; gap:10px; max-width:16rem; }
 .menu-col button{ width:100%; }
 .card{ max-width:26rem; width:100%; margin:auto; }
@@ -349,7 +344,7 @@ let MAP_PX_W = MAP_W * TILE;        // map size, in pixels
 let MAP_PX_H = MAP_H * TILE;
 
 // Terrain types. Each tile of the map stores one of these numbers.
-const T_GRASS = 0, T_WATER = 1, T_TREE = 2, T_DIRT = 3, T_ROCK = 4, T_CLIFF = 5;   // cliff: the edge of a plateau (not walkable)   // rock: arena walls and stands (not walkable)
+const T_GRASS = 0, T_WATER = 1, T_TREE = 2, T_DIRT = 3, T_ROCK = 4, T_CLIFF = 5, T_SAND = 6, T_SWAMP = 7, T_BOULDER = 8;   // sand and swamp are walkable (swamp is slow); boulders are not   // cliff: the edge of a plateau (not walkable)   // rock: arena walls and stands (not walkable)
 
 // Player ids. Every unit and building has an "owner".
 const PLAYER = 0, ENEMY = 1, CREEPS = 2, NEUTRAL = -1;   // CREEPS = wild creatures guarding camps
@@ -391,7 +386,7 @@ const DIRS = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
 const FACTIONS = [
   { name:'Kingdom', color:'#3f6fb5', dark:'#27477a', light:'#7fa6dc', skin:'#e3b58c',
     helm:'#9aa3ab', wall:'#a79f90', horns:false,
-    names:{ worker:'Worker', footman:'Footman', archer:'Longbowman', javelin:'Javelin thrower', ranged:'Longbowman', scorpion:'Scorpion', cannon:'Cannon', siege:'Scorpion', hero:'Commander', healer:'High Priestess', axeman:'Axeman', hunter:'Hunter', huntmaster:'Huntmaster', hound:'Hunting dog', cage:'Prison cage', wagon:'Supply wagon', scout:'Scout', knight:'Knight', priest:'Priest', mage:'Sorceress',
+    names:{ worker:'Worker', footman:'Footman', archer:'Longbowman', javelin:'Javelin thrower', ranged:'Longbowman', scorpion:'Scorpion', cannon:'Cannon', siege:'Scorpion', hero:'Commander', healer:'High Priestess', recruit:'Recruit', acolyte:'Acolyte', axeman:'Axeman', hunter:'Hunter', huntmaster:'Huntmaster', hound:'Hunting dog', cage:'Prison cage', wagon:'Supply wagon', scout:'Scout', knight:'Knight', priest:'Priest', mage:'Sorceress',
             townhall:'Keep', townhall2:'Castle', townhall3:'Citadel', farm:'Farm', farm2:'Homestead', barracks:'Barracks', tower:'Watch tower', tower2:'Guard tower', tower3:'Fortified tower', market:'Market', lumbermill:'Lumber mill',
             blacksmith:'Blacksmith', stable:'Stable', temple:'Temple' } },
   { name:'Orc clans', color:'#b4412a', dark:'#6f2417', light:'#e07a5c', skin:'#79a24d',
@@ -403,7 +398,7 @@ const FACTIONS = [
   { name:'Wild creatures', color:'#9b7fd0', dark:'#5e4a86', light:'#c9b6ef', skin:'#9b8fb0',
     helm:'#5a524a', wall:'#77706a', horns:false,
     names:{ kobold:'Kobold', kslinger:'Kobold slinger', wolf:'Timber wolf', spider:'Giant spider', spitter:'Venom spitter',
-            ogre:'Ogre', ogremage:'Ogre shaman', golem:'Rock golem',
+            ogre:'Ogre', ogremage:'Ogre shaman', golem:'Rock golem', bandit:'Bandit', brigand:'Brigand archer', skeleton:'Skeleton warrior', skelarcher:'Skeleton archer',
             // Lairs: the building's level picks which kind (1 warren, 2 nest, 3 hut, 4 circle, 5 den).
             lair:'Kobold warren', lair2:'Spider nest', lair3:'Ogre hut', lair4:'Stone circle', lair5:'Wolf den' } },
 ];
@@ -421,6 +416,11 @@ const UNIT_TYPES = {
              cost:{gold:150, wood:200}, time:18, food:2, ranged:true, hero:true, woods:true },
   hound:   { hp:120, armor:1, damage:8,  range:1,   cooldown:1.0, speed:2.8, sight:7,
              cost:{gold:0, wood:0}, time:1, food:0, woods:true },
+  // Kingdom recruits and acolytes: cheap and weak, promoted into real soldiers.
+  recruit: { hp:40,  armor:0, damage:0,  range:1,   cooldown:1.1, speed:2.1, sight:5,
+             cost:{gold:0, wood:0}, time:7, food:1, faction:'kingdom', noAttack:true },
+  acolyte: { hp:35,  armor:0, damage:0,  range:1,   cooldown:1.5, speed:2.0, sight:6,
+             cost:{gold:0, wood:0}, time:8, food:1, faction:'kingdom', noAttack:true },
   footman: { hp:70,  armor:2, damage:9,  range:1,   cooldown:1.0, speed:2.0, sight:5,
              cost:{gold:90,  wood:0},  time:10, food:1 },
   // Kingdom Longbowman: fragile sniper. Outranges most units; piercing shots
@@ -468,6 +468,10 @@ const UNIT_TYPES = {
   kslinger: { hp:35,  armor:0, damage:5,  range:4,   cooldown:1.4, speed:2.0, sight:5, cost:{gold:0, wood:0}, time:1, food:0, creep:true, bounty:10, bar:22, ranged:true },
   wolf:     { hp:60,  armor:1, damage:7,  range:1,   cooldown:0.9, speed:2.8, sight:5, cost:{gold:0, wood:0}, time:1, food:0, creep:true, bounty:12, bar:18 },
   spitter:  { hp:60,  armor:0, damage:8,  range:4,   cooldown:1.5, speed:2.2, sight:5, cost:{gold:0, wood:0}, time:1, food:0, creep:true, bounty:16, bar:20, ranged:true },
+  bandit:   { hp:70,  armor:1, damage:9,  range:1,   cooldown:1.1, speed:2.2, sight:5, cost:{gold:0, wood:0}, time:1, food:0, creep:true, bounty:16, bar:22 },
+  brigand:  { hp:50,  armor:0, damage:8,  range:4.5, cooldown:1.4, speed:2.2, sight:6, cost:{gold:0, wood:0}, time:1, food:0, creep:true, bounty:16, bar:22, ranged:true },
+  skeleton: { hp:65,  armor:2, damage:8,  range:1,   cooldown:1.2, speed:1.9, sight:5, cost:{gold:0, wood:0}, time:1, food:0, creep:true, bounty:14, bar:22 },
+  skelarcher:{ hp:45, armor:1, damage:7,  range:4.5, cooldown:1.5, speed:1.9, sight:6, cost:{gold:0, wood:0}, time:1, food:0, creep:true, bounty:14, bar:22, ranged:true },
   ogremage: { hp:190, armor:1, damage:14, range:4.5, cooldown:1.8, speed:1.7, sight:5, cost:{gold:0, wood:0}, time:1, food:0, creep:true, bounty:45, bar:36, big:true, ranged:true },
 };
 
@@ -506,7 +510,7 @@ const BUILDING_TYPES = {
               // Upgraded farms trickle in gold: "income" gold every "every" seconds.
               upgrade:{ cost:{gold:100, wood:60}, time:20, income:5, every:10 } },
   barracks: { size:3, hp:700,  armor:2, cost:{gold:160, wood:80},  time:25, food:0, sight:4,
-              trains:['footman','archer','javelin','hero','healer'], research:['toughness', 'shields', 'veterans', 'thickhides', 'discipline'] },
+              trains:['recruit', 'footman','archer','javelin','hero','healer'], research:['toughness', 'shields', 'veterans', 'thickhides', 'discipline'] },
   // Shoots arrows at enemies in range by itself.
   tower:      { size:2, hp:500, armor:4, cost:{gold:120, wood:100}, time:25, food:0, sight:8, trains:[],
                 attack:{ damage:10, range:6, cooldown:1.6 },
@@ -525,7 +529,7 @@ const BUILDING_TYPES = {
   stable:     { size:3, hp:600, armor:2, cost:{gold:180, wood:100}, time:30, food:0, sight:4,
                 trains:['knight'], requires:'townhall2', research:['barding', 'lances'] },
   temple:     { size:2, hp:500, armor:1, cost:{gold:160, wood:120}, time:30, food:0, sight:5,
-                trains:['priest', 'mage'], requires:'townhall3', research:['prayers', 'innerfire', 'polymorph', 'bloodlust', 'chainlightning', 'trollblood', 'sanctuary'] },
+                trains:['acolyte', 'priest', 'mage'], requires:'townhall3', research:['prayers', 'innerfire', 'polymorph', 'bloodlust', 'chainlightning', 'trollblood', 'sanctuary'] },
 };
 // The order buildings appear in the worker's build menu.
 const BUILD_MENU = ['farm','barracks','townhall','lumbermill','blacksmith','tower','market','stable','temple'];
@@ -577,6 +581,10 @@ const RESEARCH = {
 // Heroes carry up to 4 items. Stats are added on top of the hero's own:
 // damage, armor, hp (max health), speed (fraction), lifesteal (fraction healed
 // from damage dealt). Items with "use" are consumed when used.
+// LESSON: One knob for battle length. Every unit's health is multiplied here,
+// once, at start-up; damage stays the same, so fights last about 1.6 times longer.
+const HP_SCALE = 1.6;
+for (const T of Object.values(UNIT_TYPES)) T.hp = Math.round(T.hp * HP_SCALE);
 const ITEMS = {
   potion: { name:'Healing potion',   desc:'Drink to restore 120 health',        cost:75,  use:'heal', shop:true, short:'Use: +120hp', icon:'#c0392b' },
   boots:  { name:'Swift boots',      desc:'+25% movement speed',                cost:120, speed:.25,  shop:true, short:'+25% speed', icon:'#7a5530' },
@@ -586,10 +594,38 @@ const ITEMS = {
   fang:   { value:150, name:'Vampire fang',     desc:'Heals the hero for 20% of damage dealt', lifesteal:.2, short:'Lifesteal', icon:'#e8e0d0' },
   tome:   { value:100, name:'Tome of wisdom',   desc:'Read to gain a level',               use:'level', short:'Use: +1 level', icon:'#7a4fb0' },
   crown:  { value:250, name:'Crown of the Vale', desc:'+3 damage, +2 armor, +80 health',   damage:3, armor:2, hp:80, short:'+3 dmg +2 armor', icon:'#e8c547' },
+  gloves: { name:'Gloves of haste',  desc:'Attacks 15% faster',                 cost:160, haste:.15,  shop:true, short:'+15% attack speed', icon:'#d08a3a', art:'claws' },
+  pendant:{ name:'Pendant of renewal', desc:'Regenerates 1.5 health per second', cost:140, regen:1.5, shop:true, short:'+1.5 hp/s', icon:'#5ad0a0', art:'amulet' },
+  scope:  { name:'Hawk feather',     desc:'+1 attack range for ranged heroes',  cost:170, range:1,    shop:true, short:'+1 range', icon:'#c8b08a', art:'fang' },
+  elixir: { name:'Greater potion',   desc:'Drink to restore 300 health',        cost:150, use:'heal', heal:300, shop:true, short:'Use: +300hp', icon:'#8e44ad', art:'potion' },
 };
-const ITEM_SLOTS = 4;
+// LESSON: Variety from one table. Every item that gives a single stat also
+// comes in a +1 version (1.5 times as strong) and a +2 version (twice as strong).
+// They are generated here rather than written out, so a new stat item gets its
+// stronger versions for free. Shops sell the plain ones; +1 and +2 come from
+// camp loot and the Market's rotating special offer.
+const ITEM_TIERS = { boots:'speed', ring:'armor', claws:'damage', amulet:'hp', fang:'lifesteal', gloves:'haste', pendant:'regen', scope:'range' };
+const STAT_TEXT = { speed:v => [`+${Math.round(v * 100)}% movement speed`, `+${Math.round(v * 100)}% speed`], armor:v => [`+${v} armor`, `+${v} armor`],
+  damage:v => [`+${v} damage`, `+${v} damage`], hp:v => [`+${v} health`, `+${v} health`], lifesteal:v => [`Heals the hero for ${Math.round(v * 100)}% of damage dealt`, `${Math.round(v * 100)}% lifesteal`],
+  haste:v => [`Attacks ${Math.round(v * 100)}% faster`, `+${Math.round(v * 100)}% attack speed`], regen:v => [`Regenerates ${v} health per second`, `+${v} hp/s`],
+  range:v => [`+${v} attack range for ranged heroes`, `+${v} range`] };
+for (const [k, stat] of Object.entries(ITEM_TIERS)) for (const t of [1, 2]){
+  const B = ITEMS[k], v = Math.round(B[stat] * (t === 1 ? 1.5 : 2) * 100) / 100, price = Math.round((B.cost || B.value) * (t === 1 ? 1.8 : 2.6)), [desc, short] = STAT_TEXT[stat](v);
+  ITEMS[k + '+' + t] = { ...B, [stat]:v, name:B.name + ' +' + t, desc, short, cost:price, value:price, shop:false, base:k, tier:t };
+}
+const ITEM_SLOTS = 6;
+const slotsOf = h => ITEM_SLOTS + ((h && h.upg && h.upg.slots) || 0);   // the Barracks' Pack mule training adds slots
 // What a cleared camp can drop, by camp size (one is picked at random).
-const CAMP_DROPS = { small:['potion', 'boots', 'ring'], medium:['claws', 'amulet', 'fang', 'tome'], big:['crown'], wild:['potion', 'potion', 'boots', 'ring'] };
+const CAMP_DROPS = { small:['potion', 'boots', 'ring', 'pendant'], medium:['claws', 'amulet', 'fang', 'tome', 'gloves', 'scope', 'elixir'],
+                     big:['crown', 'claws', 'ring', 'amulet', 'fang', 'gloves', 'pendant', 'scope'], wild:['potion', 'potion', 'boots', 'ring'] };
+// Bigger camps sometimes drop the stronger versions.
+function lootTier(k, tier){
+  if (!ITEM_TIERS[k]) return k;
+  const r = Math.random();
+  if (tier === 'big') return r < .25 ? k + '+2' : r < .8 ? k + '+1' : k;
+  if (tier === 'medium') return r < .3 ? k + '+1' : k;
+  return k;
+}
 
 // Abilities. Cooldowns are in seconds.
 // LESSON: Asymmetry with one field. Research tagged faction:'orcs' or
@@ -597,8 +633,11 @@ const CAMP_DROPS = { small:['potion', 'boots', 'ring'], medium:['claws', 'amulet
 // lists, and the effects check the research key like any other upgrade.
 const factionKey = owner => FACTIONS[owner] && FACTIONS[owner].horns ? 'orcs' : 'kingdom';
 // Faction units the same way: each side trains only its own ranged unit.
+// The player's Kingdom: Recruits and Acolytes instead of soldiers and priests (who come by promotion);
+// everyone else (the orcs, and the AI) trains as before and never sees recruits.
+const kingdomRoster = (owner, list) => owner === PLAYER && kingdomLarva() ? list.filter(t => !VIA_PROMOTION.has(t) && !UNIT_TYPES[t].hero) : list.filter(t => t !== 'recruit' && t !== 'acolyte');   // (your Kingdom's heroes come from the town hall)
 const missionRoster = type => { const M = G && G.mission && MISSIONS[G.mission.key]; return M && M.setup.roster && M.setup.roster[type]; };
-const trainsFor = (owner, type) => missionRoster(type) || (BUILDING_TYPES[type].trains || []).filter(t => (!UNIT_TYPES[t].faction || UNIT_TYPES[t].faction === factionKey(owner)) && techAllows('unit', t));
+const trainsFor = (owner, type) => missionRoster(type) || (owner === PLAYER && kingdomLarva() && type === 'townhall' ? ['hero', 'healer'].filter(t => techAllows('unit', t)) : null) || kingdomRoster(owner, (BUILDING_TYPES[type].trains || []).filter(t => (!UNIT_TYPES[t].faction || UNIT_TYPES[t].faction === factionKey(owner)) && techAllows('unit', t)));
 const rangedOf = owner => factionKey(owner) === 'orcs' ? 'javelin' : 'archer';
 const siegeOf = owner => factionKey(owner) === 'orcs' ? 'cannon' : 'scorpion';
 const isRangedInfantry = t => t === 'archer' || t === 'javelin';     // gets the archery upgrades
@@ -625,6 +664,8 @@ const UNIT_DESC = {
   hunter:'Woodland archer paid mostly in lumber. Beast hunter: +50% damage against creatures. Sees far.',
   huntmaster:'Hero of the woods: Volley, Hunting dog, Keen eye and Call the Pack.',
   hound:'The Huntmaster\'s hunting dog. It stays until it falls; a new one replaces it.',
+  recruit:'A raw recruit: it cannot fight. Select it to make it a Worker, Footman, Longbowman or Knight, or use it to upgrade a Farm.',
+  acolyte:'A temple novice: it cannot fight. Select it to make it a Priest or Sorceress.',
   scout:'Fast, cheap and far-sighted: find the enemy and the creature camps. Barely fights.',
   wagon:'A slow supply wagon. It cannot fight: keep it safe!',
   healer:'Hero healer who attacks from range. Heals, shields herself and restores allies nearby.',
@@ -637,16 +678,21 @@ const UNIT_DESC = {
   spitter:'Acid spit melts 3 armor for 8s.', ogre:'Huge and hard-hitting. Its Smash stuns every 12s.',
   ogremage:'Casts Bloodlust on nearby creatures: +20% damage, faster attacks.',
   golem:'A stone giant: very tough and slow. Hurls stunning boulders from range.',
+  bandit:'An outlaw with a blade. Tougher than a kobold.', brigand:'An outlaw archer.',
+  skeleton:'A risen warrior with a shield: well armoured, slow.', skelarcher:'A risen archer.',
 };
 const BUILDING_DESC = {
-  townhall:N => `Trains ${plural(N.worker)}; drop-off for gold and lumber. Upgrade it to unlock advanced buildings.`,
-  farm:N => 'Provides 4 food (army size). Upgrade it to make gold over time.',
-  barracks:N => `Trains ${plural(N.footman)}, ${plural(N.ranged)} and your heroes (the ${N.healer} needs a ${N.townhall2}).`,
+  townhall:N => N.recruit && kingdomLarva() ? `Recruits your heroes; drop-off for gold and lumber. (${plural(N.recruit)} come from the ${N.barracks}.)`
+                           : `Trains ${plural(N.worker)}; drop-off for gold and lumber. Upgrade it to unlock advanced buildings.`,
+  farm:N => N.recruit && kingdomLarva() ? 'Provides 2 food (army size); upgraded with a Recruit, 4 food and a little gold over time.' : 'Provides 4 food (army size). Upgrade it to make gold over time.',
+  barracks:N => N.recruit && kingdomLarva() ? `Sends out a ${N.recruit} every 10s while there is room (promote them to ${plural(N.worker)}, ${plural(N.footman)}, ${plural(N.archer)} or ${plural(N.knight)}). Hero training: levels and upgrades for a hero standing nearby.`
+                            : `Trains ${plural(N.footman)}, ${plural(N.ranged)} and your heroes (the ${N.healer} needs a ${N.townhall2}).`,
   tower:N => N.tower === 'Watch tower' ? 'Sees very far but does not attack. Upgrade it to a Guard tower to shoot enemies, then fortify it.' : 'Shoots nearby enemies on its own. Upgrade it for more damage and range.',
   lumbermill:N => 'Lumber drop-off. Researches archery and tougher buildings.',
   blacksmith:N => `Researches better weapons and armor, and builds the ${N.siege} (needs the second hall upgrade).`,
   stable:N => `Trains ${plural(N.knight)}.`,
-  temple:N => `Trains ${plural(N.priest)} and ${plural(N.mage)}, researches their spells, and heals nearby units (+2 health/s).`,
+  temple:N => N.acolyte && kingdomLarva() ? `Sends out an ${N.acolyte} every 12s while there is room (promote them to ${plural(N.priest)} or ${plural(N.mage)}), researches their spells, and heals nearby units (+2 health/s).`
+                         : `Trains ${plural(N.priest)} and ${plural(N.mage)}, researches their spells, and heals nearby units (+2 health/s).`,
   market:N => 'Sells items for your hero and trades lumber for gold.',
   cage:N => 'Prisoners are locked inside. Break it open to free them: they will join you.',
   lair:N => 'A creature lair. Left alone it breeds new creatures and makes them stronger. Destroy it to stop the camp growing.',
@@ -674,7 +720,7 @@ const HERO_SKILLS = {
             desc:v => `Nearby allies deal +${v}% damage for 10s`, short:v => `+${v}% ally damage` },
   slam:   { names:['Ground slam', 'Ground slam'],     max:3, val:[20, 35, 50],
             desc:v => `Deals ${v} damage to every enemy around the hero`, short:v => `${v} damage around` },
-  aura:   { names:['Devotion aura', 'Warlord aura'],  max:3, val:[1, 2, 3],
+  aura:   { names:['Devotion aura', 'Warlord aura'],  max:3, val:[1.5, 2.5, 3.5],    // (+armor is worth a little less than +% damage, so the Kingdom gets a little more)
             desc:v => `Passive: allies within 5 tiles get +${v} armor`, short:v => `+${v} armor to allies`,
             orc:{ val:[10, 15, 20], desc:v => `Passive: allies within 5 tiles deal +${v}% damage`, short:v => `+${v}% ally damage` } },
   ult:    { names:['Avatar', 'Blood rage'],           max:1, val:[1], reqLevel:6,
@@ -701,7 +747,7 @@ Object.assign(HERO_SKILLS, {
 Object.assign(HERO_SKILLS, {
   volley:{ names:['Volley', 'Volley'],         max:3, val:[30, 50, 70], desc:v => `A rain of arrows hits every enemy in a small area for ${v}`, short:v => `${v} to a group` },
   hound: { names:['Hunting dog', 'War hound'], max:3, val:[1, 2, 3],
-           desc:v => `Summons a hunting dog that stays until it falls (${HOUND_RANKS[v - 1].hp} health, ${HOUND_RANKS[v - 1].damage} damage). Casting again replaces it.`, short:v => `dog: ${HOUND_RANKS[v - 1].hp} health` },
+           desc:v => `Summons a hunting dog that stays until it falls (${Math.round(HOUND_RANKS[v - 1].hp * HP_SCALE)} health, ${HOUND_RANKS[v - 1].damage} damage). Casting again replaces it.`, short:v => `dog: ${Math.round(HOUND_RANKS[v - 1].hp * HP_SCALE)} health` },
   keen:  { names:['Keen eye', 'Hunter\'s eye'], max:3, val:[1, 2, 3],   desc:v => `Passive: +${v} range, and ${v * 15}% more damage to beasts`, short:v => `+${v} range` },
   pack:  { names:['Call the Pack', 'Call the Pack'], max:1, val:[30], reqLevel:6, desc:v => `Ultimate: three wolves fight beside you for ${v}s`, short:() => '3 wolves' },
 });
@@ -781,6 +827,7 @@ const nameOf = e => { if (e.kind === 'mine') return 'Gold mine';
 // level 1 and 'upgrade3' at level 2; null means it is fully upgraded.
 function nextUpgrade(b){
   const BT = BUILDING_TYPES[b.type];
+  if (b.type === 'farm' && b.owner === PLAYER && kingdomLarva()) return b.level === 1 ? KFARM_UP : null;   // costs a Recruit, always available
   if (b.type === 'tower' && !isOrc(b.owner)){                 // Kingdom: watch -> guard -> fortified
     if (b.level === 1) return techAllows('building', 'tower') ? BT.guardUp : null;
     if (b.level === 2) return techAllows('upgrade', 'tower') ? BT.upgrade : null;
@@ -867,6 +914,7 @@ function newGame(){
     aiDiff:{},                    // each AI's difficulty (easy / normal / hard)
     gathered:{},                  // gold each side has gathered (for Race for Gold)
     lumber:{},                    // lumber each side has gathered (for the lumber missions)
+    mercs:[],                     // mercenary camps
     units:[], buildings:[], mines:[], projectiles:[], effects:[],
     terrain:new Uint8Array(N),    // T_GRASS / T_WATER / ...
     wood:new Uint16Array(N),      // lumber left in each tree tile
@@ -900,11 +948,18 @@ function newGame(){
   // Every tree holds lumber, on every kind of map (the hand-made maps return early
   // from generateMap, so they never reached the line that used to do this).
   for (let i = 0; i < G.terrain.length; i++) G.wood[i] = G.terrain[i] === T_TREE ? TREE_WOOD : 0;
+  // Generated skirmish maps get two mercenary camps, equally far from the bases.
+  { const M = MAPS[G.map] || {};
+    if (!M.layout && !M.arena && !M.prison && !M.chapel && !M.valley && !M.fords && !M.fortress && !M.blank && !M.user)
+      for (const [fx, fy] of quadMap() ? [[.5, .36], [.5, .64]] : [[.18, .82], [.82, .18]]) placeMercNear(fx * MAP_W, fy * MAP_H); }
 
   // Each side starts with a finished town hall, workers and one soldier, in its corner.
   for (const o of sidesOf()){ const [bx, by] = baseCorner(o); setupBase(o, bx, by); }
 
-  if (MAPS[G.map] && MAPS[G.map].user && USER_MAP) for (const c of USER_MAP.camps || []) makeCamp(c.tier, { x:c.x, y:c.y });   // the camps you placed
+  if (MAPS[G.map] && MAPS[G.map].user && USER_MAP){
+    for (const c of USER_MAP.camps || []) makeCamp(c.tier, { x:c.x, y:c.y }, c.units);              // the camps you placed
+    G.tech = (USER_MAP.rules && USER_MAP.rules.tech) || 0; G.banned = (USER_MAP.rules && USER_MAP.rules.off) || [];   // the map's rules
+  }
   else spawnCamps();
   resetTerrainCache();
   updateFog();
@@ -936,7 +991,9 @@ const quadMap = () => G.opponents.length > 1;             // 3-4 players: mirror
 
 function setupBase(owner, tx, ty){
   const hall = placeBuilding('townhall', owner, tx, ty, true);
-  const types = ['worker','worker','worker','footman'];
+  const larva = owner === PLAYER && kingdomLarvaStart();
+  const types = larva ? Array(8).fill('recruit') : ['worker','worker','worker','footman'];
+  if (larva) G.players[owner].gold += KINGDOM_START_GOLD;          // the orcs' first workers are free; yours are promoted
   for (const t of types){
     const spot = nearestFreeTile(hall.tx + 1, hall.ty + hall.size + (owner === PLAYER ? 1 : -5));
     if (spot) spawnUnit(t, owner, (spot.x + .5) * TILE, (spot.y + .5) * TILE);
@@ -964,6 +1021,7 @@ function generateMap(seed){
     b64into(USER_MAP.terrain, t); b64into(USER_MAP.height, G.height);
     G.corners = {}; sidesOf().forEach((o, k) => { const st = USER_MAP.starts[k + 1]; if (st) G.corners[o] = st; });
     for (const [x, y] of USER_MAP.mines || []) placeMine(x, y);
+    G.mercs = []; for (const [x, y] of USER_MAP.mercs || []) placeMerc(x, y);
     return;
   }
   if (MAPS[G.map] && MAPS[G.map].layout){          // one of the hand-made layouts (MAP_LAYOUTS)
@@ -1024,7 +1082,7 @@ function generateMap(seed){
     const R = FORDS_MAP, near = (x, y, p, r) => Math.hypot(x - p[0], y - p[1]) < r;
     for (let k = 0; k < 36; k++){                   // woods, kept off the base, the fords and the roads
       const x = 3 + rand() * (MAP_W - 6), y = 3 + rand() * (MAP_H - 6);
-      if (near(x, y, R.base, 13) || near(x, y, R.stage, 8) || R.fords.some(f => near(x, y, [R.riverX(f), f], 7)) || Math.abs(x - R.riverX(y)) < 5) continue;
+      if (near(x, y, R.base, 13) || near(x, y, R.stage, 8) || R.camps.some(c => near(x, y, c, 10)) || R.fords.some(f => near(x, y, [R.riverX(f), f], 7)) || Math.abs(x - R.riverX(y)) < 5) continue;
       disk(x, y, 1 + rand() * 2.2, T_TREE);
     }
     for (let y = 0; y < MAP_H; y++){
@@ -1036,6 +1094,8 @@ function generateMap(seed){
     }
     const road = (a, b) => { const n = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) * 2); for (let k = 0; k <= n; k++){ const f = k / n; disk(a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, .9, T_DIRT); } };
     for (const f of R.fords){ road([R.base[0] + 3, R.base[1]], [R.riverX(f) - 3, f]); road([R.riverX(f) + 3, f], R.stage); }
+    for (const c of R.camps){ disk(c[0], c[1], 7.5, T_GRASS); road(c, R.stage); }    // two enemy camps on the east bank
+    road([R.riverX(R.fords[0]) + 3, R.fords[0]], R.camps[0]); road([R.riverX(R.fords[1]) + 3, R.fords[1]], R.camps[1]);
     G.corners = { [PLAYER]:[R.base[0] - 2, R.base[1] - 1], [ENEMY]:[R.stage[0], R.stage[1]] };
     placeMine(R.base[0] - 7, R.base[1] + 5); placeMine(6, 8);
     return;
@@ -1217,7 +1277,7 @@ function generateMap(seed){
 function isWalkable(x, y){
   if (!inBounds(x, y)) return false;
   const i = idx(x, y), t = G.terrain[i];
-  return (t === T_GRASS || t === T_DIRT) && G.blocked[i] === 0;
+  return (t === T_GRASS || t === T_DIRT || t === T_SAND || t === T_SWAMP) && G.blocked[i] === 0;
 }
 function hasOpenNeighbor(x, y){
   return DIRS.some(([dx, dy]) => isWalkable(x + dx, y + dy));
@@ -1561,6 +1621,22 @@ function findPath(sx, sy, rect, adj){
 // the game. So each frame gets a small "path budget"; units that miss out
 // just wait a frame or two before starting to walk.
 let pathBudget = 6, pathMsUsed = 0;
+// The nearest enemy building a unit can actually walk up to: search outward over
+// walkable ground and return the first enemy building that borders it.
+function reachableWall(u){
+  const sx = clamp(tileOf(u.x), 0, MAP_W - 1), sy = clamp(tileOf(u.y), 0, MAP_H - 1), seen = new Uint8Array(MAP_W * MAP_H), q = [sx + sy * MAP_W];
+  seen[q[0]] = 1;
+  for (let qi = 0; qi < q.length && qi < 9000; qi++){
+    const i = q[qi], x = i % MAP_W, y = (i / MAP_W) | 0;
+    for (const [dx, dy] of DIRS){
+      const nx = x + dx, ny = y + dy; if (!inBounds(nx, ny)) continue;
+      const j = nx + ny * MAP_W, id = G.blocked[j];
+      if (id){ const b = G.buildings.find(b => b.id === id); if (b && isAlive(b) && isSide(b.owner) && hostile(u.owner, b.owner)) return b; }
+      if (!seen[j] && isWalkable(nx, ny)){ seen[j] = 1; q.push(j); }
+    }
+  }
+  return null;
+}
 function moveToward(u, nav, dt){
   if (u.pathFor !== nav){
     if (pathBudget <= 0 || pathMsUsed > 6) return false;   // at most 6 searches or ~6 ms per frame
@@ -1586,8 +1662,13 @@ function attackSpeedUp(u){
 // Movement speed in tiles per second: base, plus items, minus Slow; zero while webbed.
 function speedOf(u){
   if (G.time < (u.webUntil || 0)) return 0;
+  if (u.mounted) return speedBase(u) * 1.6;                        // a mounted hero
   if (G.time < (u.sheepUntil || 0)) return 1.2;                           // a sheep wanders slowly
-  return UNIT_TYPES[u.type].speed * (1 + itemBonus(u, 'speed')) * (G.time < u.slowUntil ? 0.6 : 1);
+  return speedBase(u);
+}
+function speedBase(u){
+  return UNIT_TYPES[u.type].speed * (1 + itemBonus(u, 'speed')) * (G.time < u.slowUntil ? 0.6 : 1)
+       * (G.terrain[idx(clamp(tileOf(u.x), 0, MAP_W - 1), clamp(tileOf(u.y), 0, MAP_H - 1))] === T_SWAMP ? 0.6 : 1);   // wading through swamp
 }
 
 function followPath(u, dt){
@@ -1672,7 +1753,10 @@ function orderAttackMove(u, wx, wy){
   const tx = tileOf(wx), ty = tileOf(wy);
   setOrder(u, { type:'attackMove', nav:{ rect:rectOfTile(tx, ty), adj:!isWalkable(tx, ty) } });
 }
-function orderAttack(u, target){ setOrder(u, { type:'attack', target, nav:null, fails:0 }); }
+function orderAttack(u, target){
+  if (UNIT_TYPES[u.type].noAttack){ const c = target.kind === 'unit' ? target : centerOf(target); return orderMove([u], c.x, c.y); }   // recruits can't fight: they just walk there
+  setOrder(u, { type:'attack', target, nav:null, fails:0 });
+}
 function orderBuild(u, b){
   const prev = u.order, resume = prev && prev.type === 'gather' ? prev : prev && prev.resume ? prev.resume : null;   // remember the old job
   setOrder(u, { type:'build', building:b, nav:{ rect:rectOf(b), adj:true }, resume });
@@ -1725,6 +1809,7 @@ function orderGather(u, target){
 
 function updateUnit(u, dt){
   if (u.dead) return;                  // killed earlier this frame; removed at the end of update()
+  if (u.promoting){ promoteTick(u); return; }   // being promoted: stands still until done
   const T = UNIT_TYPES[u.type];
   u.cd = Math.max(0, u.cd - dt);
   u.moving = false; u.working = false;
@@ -1735,6 +1820,7 @@ function updateUnit(u, dt){
   }
   if (G.time < (u.stunUntil || 0)) return;               // stunned: can't move, attack or cast
   if (u.auraRegen && u.hp < u.maxHp) u.hp = Math.min(u.maxHp, u.hp + u.auraRegen * dt);          // healing aura
+  if (u.items && u.items.length && u.hp < u.maxHp){ const ir = itemBonus(u, 'regen'); if (ir) u.hp = Math.min(u.maxHp, u.hp + ir * dt); }   // Pendant of renewal
   if (u.owner !== CREEPS && G.players[u.owner].up.trollblood && u.hp < u.maxHp) u.hp = Math.min(u.maxHp, u.hp + 0.5 * dt);   // Troll blood
   if (T.hero){
     u.hp = Math.min(u.maxHp, u.hp + 0.5 * dt);                // heroes slowly heal
@@ -1757,11 +1843,21 @@ function updateUnit(u, dt){
     case 'attackMove': {
       if (G.time >= u.scanAt){
         u.scanAt = G.time + 0.35;
-        const foe = scanForEnemy(u, T.sight);
+        const foe = T.noAttack ? null : scanForEnemy(u, T.sight);
         // Fight, then "resume" the attack-move afterwards.
         if (foe){ setOrder(u, { type:'attack', target:foe, resume:o, fails:0 }); break; }
       }
-      if (moveToward(u, o.nav, dt)) u.order = null;
+      if (moveToward(u, o.nav, dt)){
+        // LESSON: Breaking through walls. If the march ends short of its goal, the
+        // way is blocked (for example towers standing on a ford). As in Warcraft,
+        // attackers then go for the nearest enemy building and, once it falls,
+        // carry on marching with a freshly searched path.
+        if (distToRect(u, o.nav.rect) > 2 && (o.wallTries || 0) < 6){      // (distToRect measures in tiles)
+          const wall = reachableWall(u);
+          if (wall){ setOrder(u, { type:'attack', target:wall, fails:0, resume:{ ...o, nav:{ ...o.nav }, wallTries:(o.wallTries || 0) + 1 } }); break; }
+        }
+        u.order = null;
+      }
       break;
     }
     case 'attack': doAttack(u, o, dt); break;
@@ -1773,7 +1869,7 @@ function updateUnit(u, dt){
 
 // Soldiers standing around look for enemies within sight.
 function idleBehaviour(u){
-  if (u.type === 'worker') return;
+  if (u.type === 'worker' || UNIT_TYPES[u.type].noAttack) return;
   if (G.time < (u.calmUntil || 0)) return;          // just escaped: don't look for a fight yet
   if (G.time < u.scanAt) return;
   u.scanAt = G.time + 0.4 + Math.random() * 0.2;   // LESSON: don't do expensive checks every frame
@@ -1855,7 +1951,7 @@ function doAttack(u, o, dt){
     if (Math.abs(c.x - u.x) > 1) u.facing = c.x < u.x ? -1 : 1;
     u.dir = dirOf(c.x - u.x, c.y - u.y);
     if (G.time < (u.sheepUntil || 0)) return;                            // sheep can't fight
-    if (u.cd <= 0){ u.cd = T.cooldown * (G.time < u.slowUntil ? 1.5 : 1) * (G.time < (u.lustUntil || 0) ? 0.8 : 1) * attackSpeedUp(u); strike(u, t); }   // Slow / Bloodlust / research
+    if (u.cd <= 0){ u.cd = T.cooldown * (G.time < u.slowUntil ? 1.5 : 1) * (G.time < (u.lustUntil || 0) ? 0.8 : 1) * attackSpeedUp(u) * (1 - itemBonus(u, 'haste')); strike(u, t); }   // Slow / Bloodlust / research
     return;
   }
   // Close and nothing in the way? Charge straight at it. (Following grid
@@ -1953,12 +2049,13 @@ function doGather(u, o, dt){
   if (o.phase === 'return'){
     if (!isAlive(o.drop)){ if (!startReturn(u, o)) u.order = null; return; }
     if (distToRect(u, rectOf(o.drop)) <= WORK_REACH){
-      const got = isAI(u.owner) ? Math.round(u.carry.amount * diffOf(u.owner).income) : u.carry.amount;
+      let got = isAI(u.owner) ? Math.round(u.carry.amount * diffOf(u.owner).income) : u.carry.amount;
+      if (u.carry.res === 'gold') got = Math.max(1, Math.round(got * upkeepOf(u.owner).rate));   // upkeep: big armies bring in less gold
       G.players[u.owner][u.carry.res] += got;
       if (u.carry.res === 'wood'){ G.lumber = G.lumber || {}; G.lumber[u.owner] = (G.lumber[u.owner] || 0) + got; }   // for the lumber missions
       if (u.carry.res === 'gold'){ G.gathered = G.gathered || {}; G.gathered[u.owner] = (G.gathered[u.owner] || 0) + got; }   // for Race for Gold
       if (u.owner === PLAYER) sfxAt(u.carry.res === 'gold' ? 'coin' : 'wood', u.x, u.y, .5);
-      if (u.owner === PLAYER) addText(u.x, u.y - 20, '+' + u.carry.amount, u.carry.res === 'gold' ? '#f2cf4b' : '#d3a066');
+      if (u.owner === PLAYER) addText(u.x, u.y - 20, '+' + (u.carry.res === 'gold' ? got : u.carry.amount), u.carry.res === 'gold' ? '#f2cf4b' : '#d3a066');
       u.carry = null; o.phase = 'go'; o.fails = 0;
       o.nav = o.res === 'gold' && isAlive(o.mine)
         ? { rect:rectOf(o.mine), adj:true }
@@ -2407,7 +2504,7 @@ function creepKilled(e, attacker){
     camp.rewarded = true;
     G.players[owner].gold += camp.reward;
     G.effects.push({ type:'ring', x:camp.x, y:camp.y, color:'#f2cf4b', life:.9, max:.9, r:3 * TILE });
-    const loot = CAMP_DROPS[camp.tier][Math.floor(Math.random() * CAMP_DROPS[camp.tier].length)];
+    const loot = lootTier(CAMP_DROPS[camp.tier][Math.floor(Math.random() * CAMP_DROPS[camp.tier].length)], camp.tier);
     dropItem(loot, camp.x, camp.y + 10);                            // treasure for a hero to pick up
     if (owner === PLAYER){ addText(camp.x, camp.y - 20, 'Camp cleared! +' + camp.reward, '#f2cf4b');
       toast('Camp cleared: +' + camp.reward + ' gold, and it dropped ' + ITEMS[loot].name + '!' + (camp.lair ? ' Destroy the lair too, or it will breed more.' : '')); }
@@ -2420,14 +2517,20 @@ function creepKilled(e, attacker){
    ========================================================================== */
 
 // Food ("supply") limits army size, like farms in classic RTS games.
+// LESSON: Upkeep, as in Warcraft 3. The more food an army uses, the less gold
+// the workers bring home: a huge army is affordable, but it costs the economy.
+// Only mined gold is affected; lumber, pillage and Market trades are not.
+const UPKEEP = [ { from:0, rate:1, label:'No upkeep' }, { from:41, rate:.7, label:'Low upkeep' }, { from:71, rate:.4, label:'High upkeep' } ];
+function upkeepOf(owner){ const used = foodOf(owner).used; let u = UPKEEP[0]; for (const t of UPKEEP) if (used >= t.from) u = t; return u; }
 function foodOf(owner){
   let cap = 0, used = 0;
   for (const b of G.buildings){
     if (b.owner !== owner) continue;
-    if (b.built >= 1) cap += BUILDING_TYPES[b.type].food;
+    if (b.built >= 1) cap += owner === PLAYER && kingdomLarva() && b.type === 'farm' ? (b.level > 1 ? 4 : 2)
+                         : owner === PLAYER && kingdomLarva() && b.type === 'townhall' ? 8 : BUILDING_TYPES[b.type].food;   // your Kingdom: small farms, a roomier hall
     for (const q of b.queue) if (q.type) used += UNIT_TYPES[q.type].food;   // research uses no food
   }
-  for (const u of G.units) if (u.owner === owner) used += UNIT_TYPES[u.type].food;
+  for (const u of G.units) if (u.owner === owner) used += u.food != null ? u.food : UNIT_TYPES[u.type].food;   // hired mercenaries carry their own food cost
   return { cap:Math.min(cap, 100), used };
 }
 
@@ -2485,7 +2588,7 @@ function tryResearch(b, key){
 // A building's queue can hold three kinds of items: units, research, upgrades.
 function queueTime(b, q){
   if (q.research) return RESEARCH[q.research].time;
-  if (q.upgrade) return upgradeData(b.type, q.to || 2, b.owner).time;
+  if (q.upgrade) return b.type === 'farm' && b.owner === PLAYER && kingdomLarva() ? KFARM_UP.time : upgradeData(b.type, q.to || 2, b.owner).time;
   return UNIT_TYPES[q.type].time;
 }
 function queueCost(b, q){
@@ -2497,6 +2600,12 @@ function tryUpgrade(b){
   const UP = nextUpgrade(b), owner = b.owner;
   if (!UP || b.queue.some(q => q.upgrade)) return fail(owner, 'Already upgraded');
   if (!canAfford(owner, UP.cost)) return fail(owner, G.players[owner].gold < UP.cost.gold ? 'Not enough gold' : 'Not enough lumber');
+  if (UP.recruit){                                          // a Recruit goes to work the farm
+    const c = centerOf(b), r = G.units.filter(u => u.owner === owner && u.type === 'recruit' && !u.dead && !u.promoting)
+      .sort((p, q) => Math.hypot(p.x - c.x, p.y - c.y) - Math.hypot(q.x - c.x, q.y - c.y))[0];
+    if (!r) return fail(owner, 'Needs a Recruit');
+    r.dead = true; G.effects.push({ type:'ring', x:r.x, y:r.y, color:'#e8c547', life:.4, max:.4, r:12 });
+  }
   pay(owner, UP.cost);
   b.queue.push({ upgrade:true, to:b.level + 1, t:0 });
   return true;
@@ -2601,9 +2710,12 @@ function effDamage(u){
   if (up.fletching && isRangedInfantry(u.type)) d += 2;
   if (up.fletching2 && isRangedInfantry(u.type)) d += 2;
   if (up.lances && u.type === 'knight') d += 4;
-  return d + itemBonus(u, 'damage') + (G.time < u.ultUntil && !isOrc(u.owner) ? 10 : 0);   // Avatar
+  return d + itemBonus(u, 'damage') + (G.time < u.ultUntil && !isOrc(u.owner) ? 10 : 0) + (u.mounted ? 2 : 0) + 2 * heroUpg(u, 'dmg');   // Avatar; mounted charge
 }
 function effArmor(e){
+  return effArmorBase(e) - (e.mounted ? 2 : 0) + heroUpg(e, 'armor');                    // a rider is an easier target
+}
+function effArmorBase(e){
   if (e.kind !== 'unit') return e.armor || 0;
   const up = G.players[e.owner].up, soldier = e.type !== 'worker' && !UNIT_TYPES[e.type].creep;
   return e.armor + (up.discipline && !UNIT_TYPES[e.type].creep ? 2 : 0) + (soldier && up.armor ? 1 : 0) + (soldier && up.armor2 ? 1 : 0) + (soldier && up.armor3 ? 1 : 0) + (e.type === 'knight' && up.barding ? 1 : 0)
@@ -2614,7 +2726,7 @@ function effArmor(e){
 function effRange(u){
   const T = UNIT_TYPES[u.type];
   const up = G.players[u.owner].up;
-  return T.range + (isRangedInfantry(u.type) ? (up.longbows ? 1.5 : 0) + (up.eagleeye ? 1 : 0) : 0) + (u.skills && u.skills.keen ? u.skills.keen : 0);
+  return T.range + (isRangedInfantry(u.type) ? (up.longbows ? 1.5 : 0) + (up.eagleeye ? 1 : 0) : 0) + (u.skills && u.skills.keen ? u.skills.keen : 0) + (UNIT_TYPES[u.type].ranged ? itemBonus(u, 'range') + heroUpg(u, 'range') : 0);
 }
 const carryCap = u => { const up = G.players[u.owner].up; return up.tools2 ? 20 : up.tools ? 15 : 10; };
 
@@ -2680,7 +2792,7 @@ function applyDamage(t, dmg, attacker){
   if (t.owner === PLAYER && attacker && hostile(PLAYER, attacker.owner)) underAttack(t);
   else if (attacker && attacker.owner === PLAYER) G.combatT = G.time;     // drums when your troops fight
   // Idle soldiers hit back when attacked.
-  if (t.kind === 'unit' && t.type !== 'worker' && !UNIT_TYPES[t.type].cart && !t.order && !(G.time < (t.calmUntil || 0)) && isAlive(attacker) && attacker.kind === 'unit'){
+  if (t.kind === 'unit' && t.type !== 'worker' && !UNIT_TYPES[t.type].cart && !UNIT_TYPES[t.type].noAttack && !t.order && !(G.time < (t.calmUntil || 0)) && isAlive(attacker) && attacker.kind === 'unit'){
     const reachT = UNIT_TYPES[t.type].ranged ? effRange(t) + 1 : 2;
     if (t.stance !== 'hold' || Math.hypot(attacker.x - t.x, attacker.y - t.y) / TILE <= reachT)        // holding units only hit back within reach
       setOrder(t, { type:'attack', target:attacker, leash:{ x:t.x, y:t.y }, leashR:t.stance === 'def' ? 5 : 9, hold:t.stance === 'hold', fails:0 });
@@ -2727,7 +2839,7 @@ function addXP(h, amount){
   while (h.level < 10 && h.xp >= xpNeeded(h.level)){
     h.xp -= xpNeeded(h.level);
     h.level++;
-    h.maxHp += 20; h.damage += 1;          // max health grows, but current health is NOT refilled
+    h.maxHp += Math.round(20 * HP_SCALE); h.damage += 1;          // max health grows, but current health is NOT refilled
     if (h.level % 3 === 0) h.armor++;
     h.skillPoints++;
     addText(h.x, h.y - 30, 'Level ' + h.level + '!', '#f2cf4b');
@@ -2870,7 +2982,7 @@ function concoctionLands(p){
 // LESSON: Units that belong to one mission. They are ordinary units, but no
 // building trains them by default; a mission can hand a building its own
 // roster (setup.roster), which replaces that building's usual list.
-const CREEP_TYPES = new Set(['kobold', 'kslinger', 'wolf', 'spider', 'spitter', 'ogre', 'ogremage', 'golem']);
+const CREEP_TYPES = new Set(['kobold', 'kslinger', 'wolf', 'spider', 'spitter', 'ogre', 'ogremage', 'golem', 'bandit', 'brigand', 'skeleton', 'skelarcher']);
 function castVolley(h){
   const r = h.skills.volley; if (!r || G.time < h.ready.volley) return false;
   const foes = G.units.filter(e => hostile(h.owner, e.owner) && !e.dead && !e.hidden && Math.hypot(e.x - h.x, e.y - h.y) / TILE <= effRange(h) + 1);
@@ -2893,7 +3005,7 @@ function castHound(h){
   if (old){ old.dead = true; G.effects.push({ type:'ring', x:old.x, y:old.y, color:'#c8b89a', life:.4, max:.4, r:14 }); }   // only one dog at a time
   const R = HOUND_RANKS[r - 1], sp = nearestFreeTile(tileOf(h.x) + 1, tileOf(h.y) + 1);
   const d = spawnUnit('hound', h.owner, (sp.x + .5) * TILE, (sp.y + .5) * TILE);
-  d.maxHp = d.hp = R.hp; d.damage = R.damage; d.armor = R.armor; d.master = h.id; h.dogId = d.id;
+  d.maxHp = d.hp = Math.round(R.hp * HP_SCALE); d.damage = R.damage; d.armor = R.armor; d.master = h.id; h.dogId = d.id;
   G.effects.push({ type:'ring', x:d.x, y:d.y, color:'#c8b89a', life:.6, max:.6, r:18 }); sfxAt('growl', d.x, d.y, .7);
   return true;
 }
@@ -3115,7 +3227,7 @@ function itemBonus(u, stat){
   return sum;
 }
 function giveItem(h, key){
-  if (!h || h.dead || h.items.length >= ITEM_SLOTS) return false;
+  if (!h || h.dead || h.items.length >= slotsOf(h)) return false;
   h.items.push(key);
   const I = ITEMS[key];
   if (I.hp){ h.maxHp += I.hp; h.hp += I.hp; }
@@ -3126,7 +3238,7 @@ function useItem(h, i){
   if (!I || !I.use) return false;
   if (I.use === 'heal'){
     if (h.hp >= h.maxHp - 1) return fail(h.owner, 'Already at full health');
-    h.hp = Math.min(h.maxHp, h.hp + 120);
+    h.hp = Math.min(h.maxHp, h.hp + (I.heal || 120));
     G.effects.push({ type:'ring', x:h.x, y:h.y - 6, color:'#8fe38a', life:.6, max:.6, r:16 });
   } else if (I.use === 'level') addXP(h, xpNeeded(h.level) - h.xp);
   h.items.splice(i, 1);
@@ -3160,7 +3272,7 @@ function heroPickup(h){
     const d = Math.hypot(it.x - h.x, it.y - h.y);
     if (it.ignoreBy === h.id){ if (d > TILE * 1.8) it.ignoreBy = null; continue; }   // just dropped by this hero
     if (d > TILE * 1.1) continue;
-    if (h.items.length >= ITEM_SLOTS){
+    if (h.items.length >= slotsOf(h)){
       if (h.owner === PLAYER && G.time - (h.fullWarned || -99) > 6){ h.fullWarned = G.time; toast('Inventory full: use an item first'); }
       continue;
     }
@@ -3171,11 +3283,103 @@ function heroPickup(h){
 }
 function playerHero(owner){ return G.units.find(u => u.owner === owner && UNIT_TYPES[u.type].hero && !u.dead); }
 const heroesOf = owner => G.units.filter(u => u.owner === owner && UNIT_TYPES[u.type].hero && !u.dead);
+// ----- Mercenary camps -----
+// LESSON: A neutral shop on the map. Like a gold mine it belongs to nobody;
+// select it to see who is for hire. Mercenaries are not from either faction,
+// a hero of yours must stand nearby to hire them, and each camp's stock is
+// limited and refills slowly, so it can top up an army but never replace one.
+const MERC_OFFERS = [
+  { type:'bandit',  gold:80,  wood:0,   food:1, stock:3 },
+  { type:'brigand', gold:85,  wood:0,   food:1, stock:3 },
+  { type:'spider',  gold:110, wood:0,   food:1, stock:2 },
+  { type:'ogre',    gold:200, wood:40,  food:2, stock:2 },
+  { type:'golem',   gold:350, wood:100, food:3, stock:1 },
+];
+const MERC_REACH = 7, MERC_REFILL = 45;            // a hero must be this close (tiles); one more of each every 45s
+function placeMerc(tx, ty){
+  for (let y = ty; y < ty + 3; y++) for (let x = tx; x < tx + 3; x++) if (inBounds(x, y)){ G.terrain[idx(x, y)] = T_GRASS; G.wood[idx(x, y)] = 0; }
+  const m = { id:G.nextId++, kind:'merc', tx, ty, size:3, stock:Object.fromEntries(MERC_OFFERS.map(o => [o.type, o.stock])), refillAt:G.time + MERC_REFILL };
+  (G.mercs = G.mercs || []).push(m); markBlocked(m, m.id);
+  return m;
+}
+// Find a clear 3x3 spot (with room around it) near a point, and put a camp there.
+function placeMercNear(fx, fy){
+  for (let r = 0; r < 14; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++){
+    if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+    const tx = Math.round(fx) + dx, ty = Math.round(fy) + dy; let ok = true;
+    for (let y = ty - 1; y <= ty + 3 && ok; y++) for (let x = tx - 1; x <= tx + 3 && ok; x++) ok = inBounds(x, y) && !isBorderTile(x, y) && isWalkable(x, y) && !G.height[idx(x, y)];
+    if (ok) return placeMerc(tx, ty);
+  }
+  return null;
+}
+function mercTick(){                                  // once a second: stock slowly refills
+  for (const m of G.mercs || []) if (G.time >= m.refillAt){
+    m.refillAt = G.time + MERC_REFILL;
+    for (const o of MERC_OFFERS) m.stock[o.type] = Math.min(o.stock, (m.stock[o.type] || 0) + 1);
+  }
+}
+// Which hero receives a purchase: the selected hero, else the first with room in its pack.
+function buyerHero(owner){
+  const sel = owner === PLAYER && selection.find(u => u.kind === 'unit' && u.owner === owner && UNIT_TYPES[u.type].hero && !u.dead);
+  return sel || heroesOf(owner).find(x => x.items.length < slotsOf(x)) || playerHero(owner);
+}
+// The hero who can hire at a camp: the buyer if close enough, else any hero close enough.
+function mercHero(m, owner = PLAYER){
+  const c = centerOf(m), near = h => h && !h.dead && Math.hypot(h.x - c.x, h.y - c.y) / TILE <= MERC_REACH;
+  const b = buyerHero(owner); return near(b) ? b : heroesOf(owner).find(near) || null;
+}
+function hireMerc(m, offer, owner = PLAYER){
+  const P = G.players[owner], h = mercHero(m, owner), f = foodOf(owner);
+  if (!h) return fail(owner, 'Bring a hero to the camp to hire');
+  if (!(m.stock[offer.type] > 0)) return fail(owner, 'None left; more arrive soon');
+  if (P.gold < offer.gold || P.wood < offer.wood) return fail(owner, 'Not enough resources');
+  if (f.used + offer.food > f.cap) return fail(owner, 'Build more farms');
+  P.gold -= offer.gold; P.wood -= offer.wood; m.stock[offer.type]--;
+  const c = centerOf(m), sp = nearestFreeTile(tileOf(c.x), tileOf(c.y) + 2);
+  const u = spawnUnit(offer.type, owner, (sp.x + .5) * TILE, (sp.y + .5) * TILE);
+  u.merc = true; u.food = offer.food;
+  orderMove([u], h.x + TILE, h.y + TILE);
+  if (owner === PLAYER){ toast(nameOf(u) + ' hired'); sfx('ack'); }
+  return true;
+}
+function drawMerc(m){
+  const px = m.tx * TILE, py = m.ty * TILE, S = 3 * TILE;
+  ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.beginPath(); ctx.ellipse(px + S / 2, py + S - 6, S / 2, 9, 0, 0, Math.PI * 2); ctx.fill();
+  const tent = (x, y, w, h, c1, c2) => {                     // a canvas tent
+    ctx.fillStyle = c1; ctx.beginPath(); ctx.moveTo(x, y + h); ctx.lineTo(x + w / 2, y); ctx.lineTo(x + w, y + h); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = c2; ctx.beginPath(); ctx.moveTo(x + w / 2, y); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w / 2, y + h); ctx.closePath(); ctx.fill();
+    box(x + w / 2 - 3, y + h - 10, 6, 10, '#2a1d12');
+  };
+  tent(px + 4, py + 18, 40, 34, '#b89a6a', '#957a50');
+  tent(px + 50, py + 26, 38, 30, '#a68a5a', '#836a44');
+  box(px + 44, py - 6, 2, 40, '#4a3321'); box(px + 46, py - 6, 18, 12, '#6b2a2a');      // banner with crossed swords
+  box(px + 50, py - 3, 10, 1, '#d8d2c4'); box(px + 54, py - 5, 1, 9, '#d8d2c4'); box(px + 50, py + 3, 10, 1, '#d8d2c4');
+  const fx = px + 40, fy = py + 76, fl = Math.sin(animT * 9) * 1.5;                     // campfire
+  box(fx - 7, fy + 2, 14, 3, '#4a3321');
+  disc(ctx, fx, fy - 2, 7 + fl * .4, 'rgba(255,150,60,.25)'); box(fx - 3, fy - 6 - fl, 6, 7 + fl, '#ff9a3a'); box(fx - 1, fy - 8 - fl, 3, 4, '#ffd76a');
+  box(px + 74, py + 62, 2, 18, '#5a3f29'); box(px + 70, py + 64, 10, 2, '#5a3f29');      // weapon rack
+  box(px + 72, py + 56, 1, 10, '#c8ccd2'); box(px + 77, py + 58, 1, 8, '#c8ccd2');
+  if (selection.includes(m)){ ctx.strokeStyle = '#f2d34a'; ctx.lineWidth = 2; ctx.strokeRect(px + 1, py + 1, S - 2, S - 2); }
+}
+// A bobbing arrow over the hero who will receive a purchase (Market or mercenary camp selected).
+function drawBuyerArrow(){
+  const e = selection[0]; if (!e || selection.length !== 1) return;
+  let h = null;
+  if (e.kind === 'merc') h = mercHero(e) || buyerHero(PLAYER);
+  else if (e.kind === 'building' && e.owner === PLAYER && e.built >= 1 && BUILDING_TYPES[e.type].shop) h = buyerHero(PLAYER);
+  else if (e.kind === 'building' && e.owner === PLAYER && e.built >= 1 && e.type === 'barracks' && kingdomLarva()) h = trainHero(e);
+  if (!h || h.dead) return;
+  const y = h.y - 46 - Math.abs(Math.sin(animT * 4)) * 6, x = h.x;
+  ctx.fillStyle = '#0b1a2e'; ctx.beginPath(); ctx.moveTo(x - 9, y - 2); ctx.lineTo(x + 9, y - 2); ctx.lineTo(x, y + 11); ctx.closePath(); ctx.fill();
+  box(x - 3, y - 11, 6, 10, '#0b1a2e');
+  ctx.fillStyle = '#5aa8ff'; ctx.beginPath(); ctx.moveTo(x - 7, y); ctx.lineTo(x + 7, y); ctx.lineTo(x, y + 8); ctx.closePath(); ctx.fill();
+  box(x - 2, y - 9, 4, 8, '#5aa8ff');
+}
+
 function buyItem(owner, key){
-  const sh = owner === PLAYER && selection.find(u => UNIT_TYPES[u.type].hero && !u.dead);
-  const I = ITEMS[key], h = sh || heroesOf(owner).find(x => x.items.length < ITEM_SLOTS) || playerHero(owner);
+  const I = ITEMS[key], h = buyerHero(owner);                  // (the selection can include the Market itself, which is not a unit)
   if (!h) return fail(owner, 'You need a hero to carry items');
-  if (h.items.length >= ITEM_SLOTS) return fail(owner, 'Your hero\'s inventory is full');
+  if (h.items.length >= slotsOf(h)) return fail(owner, 'Your hero\'s inventory is full');
   if (G.players[owner].gold < I.cost) return fail(owner, 'Not enough gold');
   G.players[owner].gold -= I.cost;
   giveItem(h, key);
@@ -3432,6 +3636,15 @@ function aiThink(me = ENEMY){
   }
 
   // Upgrade farms one at a time once there's spare gold.
+  // Heroes ride when travelling and get down when a fight is close.
+  for (const h of heroesOf(me)){
+    const o = h.order, near = enemiesNear(h, 6).length;
+    let far = false;                                       // is the hero heading somewhere distant?
+    if (o && o.target && isAlive(o.target)){ const c = o.target.kind === 'unit' ? o.target : centerOf(o.target); far = Math.hypot(c.x - h.x, c.y - h.y) / TILE > 8; }
+    else if (o && o.nav && o.nav.rect) far = distToRect(h, o.nav.rect) > 8;
+    if (!h.mounted && far && !enemiesNear(h, 7).length) toggleMount(h);
+    else if (h.mounted && near >= 2) toggleMount(h);
+  }
   // Short of gold but rich in lumber: sell lumber at the Market (one trade a second at most).
   if (P.gold < 200 && P.wood > 400 && blds.some(b => b.type === 'market' && b.built >= 1) && marketOf(me).sell > 45) trade(me, true);
   // Kingdom watch towers only shoot once upgraded to Guard towers.
@@ -3550,11 +3763,11 @@ function aiThink(me = ENEMY){
                    && (k === ult || h.skills[k] <= Math.min(...list.slice(0, 3).map(x => h.skills[x]))));
     if (!pick || !learnSkill(h, pick)) break;
   }
-  if (eh && hasBuilding(me, 'market') && eh.items.length < ITEM_SLOTS && P.gold > 350){
+  if (eh && hasBuilding(me, 'market') && eh.items.length < slotsOf(eh) && P.gold > 350){
     const wish = ['claws', 'ring', 'amulet', 'boots', 'potion'].find(k => !eh.items.includes(k) || k === 'potion');
     if (wish && P.gold - ITEMS[wish].cost > 200) buyItem(me, wish);
   }
-  if (eh && !eh.order && eh.items.length < ITEM_SLOTS){
+  if (eh && !eh.order && eh.items.length < slotsOf(eh)){
     const loot = G.items.find(it => !it.taken && Math.hypot(it.x - eh.x, it.y - eh.y) < (threat ? 10 : 40) * TILE);
     if (loot) orderMove([eh], loot.x, loot.y);
   }
@@ -3692,8 +3905,8 @@ let frameNo = 0, chunkCap = 48;
 
 // Minimap: one pixel per tile, updated when a single tile changes.
 const minimapBase = makeCanvas(MAP_W, MAP_H), mbctx = minimapBase.getContext('2d');
-const TERRAIN_COLORS = ['#5a8538', '#2e5c88', '#2a5022', '#8a6a42', '#6f695f', '#4d4438'];   // grass, water, tree, dirt, rock
-const WINTER_COLORS  = ['#dfe6ee', '#a8cfe2', '#2f4a44', '#b9aa98', '#8f8b86', '#6e6a66'];
+const TERRAIN_COLORS = ['#5a8538', '#2e5c88', '#2a5022', '#8a6a42', '#6f695f', '#4d4438', '#cdb27a', '#4d5a34', '#6a645a'];   // grass, water, tree, dirt, rock
+const WINTER_COLORS  = ['#dfe6ee', '#a8cfe2', '#2f4a44', '#b9aa98', '#8f8b86', '#6e6a66', '#d9d2c4', '#7f8a80', '#7a7570'];
 const isWinter = () => G && MAPS[G.map] && MAPS[G.map].biome === 'winter';
 const terrainColor = t => (isWinter() ? WINTER_COLORS : TERRAIN_COLORS)[t];
 // LESSON: A whole biome from one recolouring pass. Each terrain chunk is
@@ -3853,7 +4066,7 @@ const spotOf = (name, fallback = [12, 12]) => { const L = MAP_LAYOUTS[G.map]; re
 // The Valley Road (80x80): the road's centre line, its half-width, and the three ambush clearings [x, side].
 const VALLEY = { cy:x => 40 + Math.sin(x / 11) * 9, half:5, ambush:[[24, -1], [44, 1], [62, -1]] };
 // The Twin Fords (64x64): the river's course, the two fords (y), your base and the enemy's gathering ground.
-const FORDS_MAP = { riverX:y => 34 + Math.sin(y / 7) * 2, fords:[17, 46], base:[13, 31], stage:[55, 32] };
+const FORDS_MAP = { riverX:y => 34 + Math.sin(y / 7) * 2, fords:[17, 46], base:[13, 31], stage:[55, 32], camps:[[53, 11], [53, 53]] };
 // The Fortress (80x80): wall rectangle [x0, y0, x1, y1], the gate in the south wall, the keep, your base.
 const FORTRESS_MAP = { walls:[48, 6, 74, 32], gate:[53, 57], keep:[60, 16], base:[10, 67] };
 // The Chapel Road map: the allied town, the road through the patrols, two small creature camps.
@@ -3922,6 +4135,73 @@ function addPlateaus(){
   for (const [fx, fy] of spots) makePlateau(fx * MAP_W, fy * MAP_H, r);
 }
 // A cliff face: rock, with a light lip on the high side and a dark foot on the low side.
+// ----- New terrain: sand, swamp and rocks -----
+function drawSand(x, y){
+  const px = x * TILE, py = y * TILE;
+  box(px, py, TILE, TILE, '#d2b77f');
+  for (let k = 0; k < 7; k++){ const h = hash(x * 5 + k, y * 9 - k); box(px + h * 30, py + hash(x - k, y + k * 2) * 30, 2, 1, h > .5 ? '#bf9f62' : '#e6cf98'); }
+  if (hash(x * 3, y * 7) > .85) box(px + 10, py + 14, 9, 2, '#b8975a');   // a ripple in the sand
+}
+function drawSwamp(x, y){
+  const px = x * TILE, py = y * TILE;
+  box(px, py, TILE, TILE, '#4f5a36');
+  for (let k = 0; k < 3; k++){ const h = hash(x * 7 + k, y * 3 - k); disc(ctx, px + 6 + h * 20, py + 6 + hash(x + k, y - k) * 20, 3 + h * 4, '#3a4a3a'); disc(ctx, px + 5 + h * 20, py + 5 + hash(x + k, y - k) * 20, 1.5, 'rgba(160,190,170,.35)'); }
+  for (let k = 0; k < 4; k++){ const h = hash(x - k * 5, y * 11 + k); box(px + h * 28, py + hash(x * 2 + k, y) * 26, 1, 4, '#6d7a3e'); }   // reeds
+}
+function drawBoulders(x, y){
+  const px = x * TILE, py = y * TILE;
+  box(px, py, TILE, TILE, '#5a6a3a');                                // grass between the stones
+  for (let k = 0; k < 4; k++){
+    const h = hash(x * 13 + k, y * 7 - k), h2 = hash(x - k * 3, y + k * 5), r = 6 + h * 6, bx = px + 5 + h2 * 22, by = py + 5 + h * 22;
+    disc(ctx, bx + 1, by + 2, r, '#3e3a33'); disc(ctx, bx, by, r, k % 2 ? '#8a8478' : '#7c766a'); disc(ctx, bx - r * .3, by - r * .3, r * .45, '#a39d90');
+  }
+}
+// ----- Creature groups for camps (map editor) -----
+const CREEP_GROUPS = {
+  standard: { label:'Mixed',     small:null, medium:null, big:null },     // the usual camps
+  kobolds:  { label:'Kobolds',   small:['kobold', 'kobold', 'kslinger'], medium:['kobold', 'kobold', 'kobold', 'kslinger', 'kslinger'], big:['kobold', 'kobold', 'kobold', 'kobold', 'kslinger', 'kslinger', 'kslinger'] },
+  wolves:   { label:'Wolves',    small:['wolf', 'wolf'], medium:['wolf', 'wolf', 'wolf', 'wolf'], big:['wolf', 'wolf', 'wolf', 'wolf', 'wolf', 'wolf'] },
+  spiders:  { label:'Spiders',   small:['spider', 'spitter'], medium:['spider', 'spider', 'spitter', 'spitter'], big:['spider', 'spider', 'spider', 'spitter', 'spitter', 'spitter'] },
+  ogres:    { label:'Ogres',     small:['ogre'], medium:['ogre', 'ogremage'], big:['ogre', 'ogre', 'ogremage', 'golem'] },
+  bandits:  { label:'Bandits',   small:['bandit', 'brigand'], medium:['bandit', 'bandit', 'brigand', 'brigand'], big:['bandit', 'bandit', 'bandit', 'brigand', 'brigand', 'brigand'] },
+  skeletons:{ label:'Skeletons', small:['skeleton', 'skelarcher'], medium:['skeleton', 'skeleton', 'skelarcher', 'skelarcher'], big:['skeleton', 'skeleton', 'skeleton', 'skeleton', 'skelarcher', 'skelarcher', 'skelarcher'] },
+};
+// ----- Map rules: tech level and switched-off units and buildings -----
+const RULE_UNITS = [['footman'], ['archer', 'javelin'], ['knight'], ['priest'], ['mage'], ['scorpion', 'cannon'], ['hero'], ['healer'], ['scout']];
+const RULE_BUILDINGS = ['farm', 'barracks', 'lumbermill', 'blacksmith', 'tower', 'stable', 'temple', 'market'];
+function showEditorRules(){
+  const R = ED.rules, K = BASE_FACTIONS[0].names, O = BASE_FACTIONS[1].names;
+  const on = k => !R.off.includes(k);
+  screen(`<h1>Map rules</h1>
+    <p class="how" style="margin-bottom:6px">Tech level (as in the campaign; All = everything)</p>
+    <div class="row speed" style="margin-bottom:12px; flex-wrap:wrap">${[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(t => `<button data-tech="${t}" aria-pressed="${R.tech === t}">${t || 'All'}</button>`).join('')}</div>
+    <p class="how" style="margin-bottom:6px">Units (tap to switch off or on, for every side)</p>
+    <div class="row speed" style="margin-bottom:12px; flex-wrap:wrap">${RULE_UNITS.map(ks => `<button data-ru="${ks.join(',')}" aria-pressed="${on(ks[0])}">${K[ks[0]] || O[ks[0]]}${ks[1] || O[ks[0]] !== K[ks[0]] ? ' / ' + (O[ks[1] || ks[0]]) : ''}</button>`).join('')}</div>
+    <p class="how" style="margin-bottom:6px">Buildings</p>
+    <div class="row speed" style="margin-bottom:16px; flex-wrap:wrap">${RULE_BUILDINGS.map(k => `<button data-rb="${k}" aria-pressed="${on(k)}">${K[k]} / ${O[k]}</button>`).join('')}</div>
+    <div class="row"><button class="big" id="backBtn">Done</button></div>`);
+  overlay.querySelectorAll('[data-tech]').forEach(b => b.onclick = () => { R.tech = +b.dataset.tech; showEditorRules(); });
+  overlay.querySelectorAll('[data-ru]').forEach(b => b.onclick = () => { const ks = b.dataset.ru.split(','); for (const k of ks) R.off = on(ks[0]) ? [...R.off, k] : R.off.filter(x => x !== k); showEditorRules(); });
+  overlay.querySelectorAll('[data-rb]').forEach(b => b.onclick = () => { const k = b.dataset.rb; R.off = on(k) ? [...R.off, k] : R.off.filter(x => x !== k); showEditorRules(); });
+  $('#backBtn').onclick = showEditorMenu;
+}
+// ----- Editing a beaten mission's map (as a copy) -----
+function editorFromMission(key){
+  startMission(key); running = false;
+  const starts = {};
+  sidesOf().forEach((o, k) => { const h = G.buildings.find(b => b.owner === o && b.type === 'townhall'), c = (G.corners || {})[o]; if (h) starts[k + 1] = [h.tx, h.ty]; else if (c) starts[k + 1] = c.slice(); });
+  const camps = G.camps.filter(c => CAMP_TYPES[c.tier] && c.tier !== 'wild').map(c => ({ x:c.tx, y:c.ty, tier:c.tier, units:campMembers(c).map(u => u.type) }))
+    .concat(G.camps.filter(c => c.tier === 'wild').map(c => ({ x:c.tx, y:c.ty, tier:'small', units:campMembers(c).map(u => u.type) })));
+  const ramp = new Uint8Array(MAP_W * MAP_H);                // existing ramps: high, walkable tiles next to low ground
+  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++){ const i = idx(x, y);
+    if (G.height[i] && isWalkable(x, y) && DIRS.some(([dx, dy]) => inBounds(x + dx, y + dy) && !G.height[idx(x + dx, y + dy)])) ramp[i] = 1; }
+  const data = { name:(MISSIONS[key].name + ' (copy)').slice(0, 24), n:MAP_W, biome:(MAPS[G.map] && MAPS[G.map].biome) || 'green',
+                 terrain:b64enc(G.terrain), height:b64enc(G.height), ramp:b64enc(ramp), mines:G.mines.map(m => [m.tx, m.ty]), starts, camps, rules:{ tech:0, off:[] } };
+  G.mission = null; document.body.classList.remove('mission');
+  editorStart(data);
+  toast('A copy of this mission\'s map: save it to keep it');
+}
+
 function drawCliff(x, y){
   const px = x * TILE, py = y * TILE, T = TILE;
   box(px, py, T, T, '#5e564b');                                   // shadowed rock behind
@@ -3946,6 +4226,9 @@ function drawCliff(x, y){
 function drawGround(x, y){
   if (G.terrain[idx(x, y)] === T_ROCK){ drawArenaStone(x, y); return; }
   if (G.terrain[idx(x, y)] === T_CLIFF){ drawCliff(x, y); return; }
+  if (G.terrain[idx(x, y)] === T_SAND){ drawSand(x, y); return; }
+  if (G.terrain[idx(x, y)] === T_SWAMP){ drawSwamp(x, y); return; }
+  if (G.terrain[idx(x, y)] === T_BOULDER){ drawBoulders(x, y); return; }
   const i = idx(x, y), t = G.terrain[i], px = x * TILE, py = y * TILE, h = hash(x, y);
   const treeAt = (nx, ny) => inBounds(nx, ny) && G.terrain[idx(nx, ny)] === T_TREE;
   // One base colour for all grass (per-tile shades made a visible checkerboard);
@@ -4274,14 +4557,14 @@ const SPR_W = 64, SPR_H = 64, SPR_OX = 32, SPR_OY = 46;    // unit sprite canvas
 function classicSprite(u, act, fr){
   const dir8 = u.dir ?? (u.facing > 0 ? 0 : 4), [view, mirror] = DIR_VIEW[dir8];
   const shield = u.type === 'footman' && !!G.players[u.owner].up.shields;
-  const key = 'C' + u.type + u.owner + view + (mirror ? 'm' : '') + act + fr + (u.carry ? u.carry.res : '') + (shield ? 'S' : '');
+  const key = 'C' + u.type + u.owner + view + (mirror ? 'm' : '') + act + fr + (u.carry ? u.carry.res : '') + (shield ? 'S' : '') + (u.mounted ? 'M' : '');
   let c = spriteCache.get(key);
   if (!c){
     const pose = { carry:u.carry ? { res:u.carry.res } : null, shield };
     c = outlined(SPR_W, SPR_H, () => {
       ctx.save();
       if (mirror){ ctx.translate(SPR_W, 0); ctx.scale(-1, 1); }      // W, SW and NW are mirror images
-      drawClassic(u.type, SPR_OX, SPR_OY, dir8, act, fr, FACTIONS[u.owner], pose);
+      drawClassic(u.mounted ? 'knight' : u.type, SPR_OX, SPR_OY, dir8, act, fr, FACTIONS[u.owner], pose);   // mounted heroes ride
       ctx.restore();
     });
     spriteCache.set(key, c);
@@ -4294,14 +4577,15 @@ function unitSprite(u, swing){
   const leg = u.moving && Math.sin(u.anim * 14) > 0 ? 1 : 0;
   // Footmen only show a shield once the Shields research is done, so that's part of the key too.
   const shield = u.type === 'footman' && !!G.players[u.owner].up.shields;
-  const key = artStyle + u.type + u.owner + (u.facing > 0 ? 'R' : 'L') + leg + (swing ? 1 : 0) + (u.carry ? u.carry.res : '') + (shield ? 'S' : '');
+  const key = artStyle + u.type + u.owner + (u.facing > 0 ? 'R' : 'L') + leg + (swing ? 1 : 0) + (u.carry ? u.carry.res : '') + (shield ? 'S' : '') + (u.mounted ? 'M' : '');
+  const art = u.mounted ? 'knight' : u.type;                       // mounted heroes ride
   let c = spriteCache.get(key);
   if (!c){
     const pose = { moving:!!leg, anim:leg ? 0.1 : 0, carry:u.carry ? { res:u.carry.res } : null, shield };
     const fc = u.facing > 0 ? 1 : -1, F = FACTIONS[u.owner];
     c = artStyle === 'painted'
-      ? paintedCanvas(SPR_W, SPR_H, () => PAINTED[u.type](SPR_OX, SPR_OY, fc, F, pose, swing))
-      : outlined(SPR_W, SPR_H, () => SPRITES[u.type](SPR_OX, SPR_OY, fc, F, pose, swing));
+      ? paintedCanvas(SPR_W, SPR_H, () => PAINTED[art](SPR_OX, SPR_OY, fc, F, pose, swing))
+      : outlined(SPR_W, SPR_H, () => SPRITES[art](SPR_OX, SPR_OY, fc, F, pose, swing));
     spriteCache.set(key, c);
   }
   return c;
@@ -4613,6 +4897,12 @@ const SPRITES = {
     const sx = x + fc * 8; box(sx - 3, y - 19, 6, 5, '#b98aff'); box(sx - 1, y - 18, 2, 2, '#ffffff');
   },
   hound(x, y, fc, F, u, sw){ this.wolf(x, y, fc, F, u, sw); },
+  bandit(x, y, fc, F, u, sw){ rigSide('bandit', x, y, fc, F, u, sw); },
+  brigand(x, y, fc, F, u, sw){ rigSide('brigand', x, y, fc, F, u, sw); },
+  skeleton(x, y, fc, F, u, sw){ rigSide('skeleton', x, y, fc, F, u, sw); },
+  skelarcher(x, y, fc, F, u, sw){ rigSide('skelarcher', x, y, fc, F, u, sw); },
+  recruit(x, y, fc, F, u, sw){ rigSide('recruit', x, y, fc, F, u, sw); },
+  acolyte(x, y, fc, F, u, sw){ rigSide('acolyte', x, y, fc, F, u, sw); },
   axeman(x, y, fc, F, u, sw){ rigSide('axeman', x, y, fc, F, u, sw); },
   hunter(x, y, fc, F, u, sw){ rigSide('hunter', x, y, fc, F, u, sw); },
   huntmaster(x, y, fc, F, u, sw){ rigSide('huntmaster', x, y, fc, F, u, sw); },
@@ -5564,6 +5854,12 @@ const PAINTED_GRIM = {
     } else { for (let k = -1; k <= 1; k++) pEll(x + k * 3, y - 6.4, .9, .9, '#efe6cf', 0, .5); }   // bone charms
   },
   hound(x, y, fc, F, u, sw){ this.wolf(x, y, fc, F, u, sw); },
+  bandit(x, y, fc, F, u, sw){ rigSide('bandit', x, y, fc, F, u, sw); },
+  brigand(x, y, fc, F, u, sw){ rigSide('brigand', x, y, fc, F, u, sw); },
+  skeleton(x, y, fc, F, u, sw){ rigSide('skeleton', x, y, fc, F, u, sw); },
+  skelarcher(x, y, fc, F, u, sw){ rigSide('skelarcher', x, y, fc, F, u, sw); },
+  recruit(x, y, fc, F, u, sw){ rigSide('recruit', x, y, fc, F, u, sw); },
+  acolyte(x, y, fc, F, u, sw){ rigSide('acolyte', x, y, fc, F, u, sw); },
   axeman(x, y, fc, F, u, sw){ rigSide('axeman', x, y, fc, F, u, sw); },
   hunter(x, y, fc, F, u, sw){ rigSide('hunter', x, y, fc, F, u, sw); },
   huntmaster(x, y, fc, F, u, sw){ rigSide('huntmaster', x, y, fc, F, u, sw); },
@@ -6149,6 +6445,8 @@ function classicParts(type, F, u){
     case 'priest': return orc
       ? { ...P, robe:true, cloth:'#5a4632', tabard:F.color, helm:'skull', weapon:'totem' }
       : { ...P, robe:true, cloth:'#e6dfcc', tabard:F.color, helm:'hood', hood:'#e6dfcc', weapon:'staff' };
+    case 'recruit': return { ...classicParts('footman', F, u), helm:'none', shield:null, armor:false, cloth:'#8a6a44', tabard:F.color, weapon:'sword' };
+    case 'acolyte': return { ...classicParts('priest', F, u), cloth:'#d8d0c0', tabard:'#b8b0a0' };
     case 'axeman': return { ...classicParts('footman', F, u), weapon:'axe', shield:null, helm:orc ? 'topknot' : 'hood', hood:'#6b5232', cloth:orc ? F.skin : '#5a7a3a' };
     case 'hunter': return { ...classicParts('archer', F, u), weapon:'bow', helm:'hood', hood:orc ? '#5a4632' : '#6b5232', cape:'#4a3a24', feather:false };
     case 'huntmaster': return { ...classicParts('archer', F, u), big:1, weapon:'longbow', helm:'hood', hood:'#3a5a2a', cape:'#3a5a2a', feather:true };
@@ -6165,6 +6463,10 @@ function classicParts(type, F, u){
       const skin = type === 'ogre' ? '#a497bb' : '#7f8fb8';
       return { skin, cloth:skin, belly:true, kilt:'#6b4a2b', pants:shade(skin, -.2), boots:'#3a2a1a', big:2, helm:type === 'ogre' ? 'bald' : 'magehood', orcEyes:true, tusks:true, weapon:type === 'ogre' ? 'club' : 'darkstaff' };
     }
+    case 'bandit': case 'brigand':
+      return { ...P, skin:'#e0b089', cloth:'#6b2a2a', tabard:'#6b2a2a', pants:'#3a3028', boots:'#2a2018', helm:'hood', hood:'#3a2a20', weapon:type === 'bandit' ? 'sword' : 'bow', shield:null };
+    case 'skeleton': case 'skelarcher':
+      return { ...P, skin:'#e8e2d0', cloth:'#b9b2a0', tabard:'#5a5650', pants:'#e8e2d0', boots:'#cfc8b4', helm:'none', glowEyes:'#6af0ff', weapon:type === 'skeleton' ? 'sword' : 'bow', shield:type === 'skeleton' ? '#6b5a3a' : null };
     case 'golem': return { skin:'#8f8a80', cloth:'#8f8a80', pants:'#6a655d', boots:'#5e5a53', big:2, helm:'rock', rune:true, moss:true, glowEyes:'#7ff0d0', weapon:'fist' };
   }
   return { ...P, cloth:F.color, helm:'none' };
@@ -6666,7 +6968,9 @@ function drawUnit(u){
     for (let k = 0; k < 3; k++){ const ph = (animT * .8 + k / 3) % 1; disc(ctx, x - 6 + k * 6, baseY - (big ? 30 : 24) + ph * 12, 1.6, `rgba(190,120,255,${(1 - ph).toFixed(2)})`); }
   }
   if (selection.includes(u) || u.hp < u.maxHp)
-    hpBar(x - 10, baseY - (T.bar || (u.type === 'knight' ? 36 : T.hero ? 32 : 26)), 20, u.hp / u.maxHp);
+    hpBar(x - 10, baseY - (T.bar || (u.type === 'knight' || u.mounted ? 36 : T.hero ? 32 : 26)), 20, u.hp / u.maxHp);
+  if (u.promoting){ const f = Math.min(1, (G.time - u.promoting.t0) / u.promoting.dur); box(x - 10, baseY + 10, 20, 3, '#1a120b'); box(x - 10, baseY + 10, 20 * f, 3, '#5aa8ff'); }
+  if (u.mounted){ const by = baseY - 50; box(x + 8, by, 1, 12, '#4a3321'); box(x + 9, by, 7, 5, F.color); box(x + 9, by + 5, 7, 1, '#e8c547'); }   // the hero's pennant
   // Sleeping creeps: little z's drift up.
   if (u.owner === CREEPS && !u.order && u.hp >= u.maxHp){
     const ph = (animT * 0.5 + u.id * 0.37) % 1;
@@ -6758,17 +7062,18 @@ function drawCamp(c){
 const iconCache = {}, iconURLs = {};
 function itemIconCanvas(k){
   if (iconCache[k]) return iconCache[k];
-  const I = ITEMS[k];
+  const I = ITEMS[k], ak = I.art || I.base || k;            // the shape to draw
   iconCache[k] = paintedCanvas(20, 20, () => {
     const c = I.icon;
-    if (k === 'potion'){ pRect(8, 2, 4, 4, 1, '#c9b89a', .8); pEll(10, 12, 6, 6, rad(10, 12, 6, c)); gloss(8, 10, 1.6, 1); }
-    else if (k === 'boots'){ pPoly([[5, 3], [11, 3], [11, 13], [17, 14], [17, 18], [4, 18]], lin(4, 3, 17, 18, c, .3)); pPoly([[11, 5], [18, 2], [15, 8]], '#efe8da', .7); }
-    else if (k === 'ring'){ ctx.beginPath(); ctx.arc(10, 12, 6, 0, Math.PI * 2); ctx.lineWidth = 4.2; ctx.strokeStyle = INK; ctx.stroke(); ctx.lineWidth = 2.4; ctx.strokeStyle = '#e8c547'; ctx.stroke(); pEll(10, 5, 3, 3, rad(10, 5, 3, c)); }
-    else if (k === 'claws'){ for (const dx of [-4, 0, 4]) pPoly([[10 + dx - 1.4, 17], [10 + dx + dx * .3, 2], [10 + dx + 1.4, 17]], lin(0, 2, 0, 17, c, .3), .8); pRect(4, 14, 12, 4, 1.5, '#5e4331'); }
-    else if (k === 'amulet'){ ctx.beginPath(); ctx.moveTo(4, 2); ctx.quadraticCurveTo(10, 12, 16, 2); ctx.lineWidth = 1.2; ctx.strokeStyle = '#e8c547'; ctx.stroke(); pPoly([[10, 7], [14, 12], [10, 18], [6, 12]], lin(6, 7, 14, 18, c, .35)); }
-    else if (k === 'fang'){ ctx.beginPath(); ctx.moveTo(6, 3); ctx.quadraticCurveTo(15, 3, 13, 18); ctx.quadraticCurveTo(9, 10, 6, 3); ctx.closePath(); pPath(lin(6, 3, 14, 18, c, .2)); pEll(12.6, 16.5, 1.3, 1.3, '#c0392b', 0, .5); }
-    else if (k === 'tome'){ pRect(3, 3, 14, 15, 1.5, lin(3, 3, 17, 18, c, .3)); ctx.fillStyle = '#efe8da'; ctx.fillRect(15, 4, 1.5, 13); pEll(10, 10, 2.6, 2.6, '#e8c547', 0, .6); }
+    if (ak === 'potion'){ pRect(8, 2, 4, 4, 1, '#c9b89a', .8); pEll(10, 12, 6, 6, rad(10, 12, 6, c)); gloss(8, 10, 1.6, 1); }
+    else if (ak === 'boots'){ pPoly([[5, 3], [11, 3], [11, 13], [17, 14], [17, 18], [4, 18]], lin(4, 3, 17, 18, c, .3)); pPoly([[11, 5], [18, 2], [15, 8]], '#efe8da', .7); }
+    else if (ak === 'ring'){ ctx.beginPath(); ctx.arc(10, 12, 6, 0, Math.PI * 2); ctx.lineWidth = 4.2; ctx.strokeStyle = INK; ctx.stroke(); ctx.lineWidth = 2.4; ctx.strokeStyle = '#e8c547'; ctx.stroke(); pEll(10, 5, 3, 3, rad(10, 5, 3, c)); }
+    else if (ak === 'claws'){ for (const dx of [-4, 0, 4]) pPoly([[10 + dx - 1.4, 17], [10 + dx + dx * .3, 2], [10 + dx + 1.4, 17]], lin(0, 2, 0, 17, c, .3), .8); pRect(4, 14, 12, 4, 1.5, '#5e4331'); }
+    else if (ak === 'amulet'){ ctx.beginPath(); ctx.moveTo(4, 2); ctx.quadraticCurveTo(10, 12, 16, 2); ctx.lineWidth = 1.2; ctx.strokeStyle = '#e8c547'; ctx.stroke(); pPoly([[10, 7], [14, 12], [10, 18], [6, 12]], lin(6, 7, 14, 18, c, .35)); }
+    else if (ak === 'fang'){ ctx.beginPath(); ctx.moveTo(6, 3); ctx.quadraticCurveTo(15, 3, 13, 18); ctx.quadraticCurveTo(9, 10, 6, 3); ctx.closePath(); pPath(lin(6, 3, 14, 18, c, .2)); pEll(12.6, 16.5, 1.3, 1.3, '#c0392b', 0, .5); }
+    else if (ak === 'tome'){ pRect(3, 3, 14, 15, 1.5, lin(3, 3, 17, 18, c, .3)); ctx.fillStyle = '#efe8da'; ctx.fillRect(15, 4, 1.5, 13); pEll(10, 10, 2.6, 2.6, '#e8c547', 0, .6); }
     else { pPoly([[3, 16], [3, 6], [6.5, 10], [10, 3], [13.5, 10], [17, 6], [17, 16]], lin(3, 3, 17, 16, c, .3)); pEll(10, 12.5, 1.6, 1.6, '#c0392b', 0, .6); }
+    if (I.tier){ ctx.fillStyle = I.tier === 2 ? '#b06af0' : '#5aa8ff'; ctx.fillRect(11, 0, 9, 7); ctx.fillStyle = '#fff'; ctx.font = 'bold 6px monospace'; ctx.fillText('+' + I.tier, 12, 6); }
   });
   return iconCache[k];
 }
@@ -6945,6 +7250,7 @@ function render(){
   const inView = (ax, ay, bx, by) => bx > cam.x - 40 && ax < cam.x + vw + 40 && by > cam.y - 60 && ay < cam.y + vh + 60;
   const list = [];
   for (const m of G.mines) if (isExploredEntity(m) && inView(m.tx * TILE, m.ty * TILE, (m.tx + 3) * TILE, (m.ty + 3) * TILE)) list.push(m);
+  for (const m of G.mercs || []) if (isExploredEntity(m) && inView(m.tx * TILE, m.ty * TILE, (m.tx + 3) * TILE, (m.ty + 3) * TILE)) list.push(m);
   for (const b of G.buildings) if ((b.owner === PLAYER || isExploredEntity(b)) && inView(b.tx * TILE, b.ty * TILE, (b.tx + b.size) * TILE, (b.ty + b.size) * TILE)) list.push(b);
   for (const u of G.units) if (!u.hidden && (u.owner === PLAYER || isVisibleTile(tileOf(u.x), tileOf(u.y))) && inView(u.x, u.y, u.x, u.y)) list.push(u);
   const sortY = e => e.kind === 'unit' ? e.y : (e.ty + e.size) * TILE;
@@ -6952,8 +7258,10 @@ function render(){
   for (const e of list){
     if (e.kind === 'unit') drawUnit(e);
     else if (e.kind === 'building') drawBuilding(e);
+    else if (e.kind === 'merc') drawMerc(e);
     else drawMine(e);
   }
+  drawBuyerArrow();
 
   for (const p of G.projectiles) drawProjectile(p);
   for (const fx of G.effects) if (fx.type !== 'ruin') drawEffect(fx);
@@ -6992,6 +7300,7 @@ function renderMinimap(){
   mctx.imageSmoothingEnabled = true;
   mctx.drawImage(fogCanvas, 0, 0, mini.width, mini.height);
   for (const m of G.mines) if (isExploredEntity(m)){ mctx.fillStyle = '#f2cf4b'; mctx.fillRect(m.tx * S, m.ty * S, 3 * S, 3 * S); }
+  for (const m of G.mercs || []) if (isExploredEntity(m)){ mctx.fillStyle = '#d06a3a'; mctx.fillRect(m.tx * S, m.ty * S, 3 * S, 3 * S); }
   // Explored creep camps: green = small, yellow = medium, red = big.
   for (const c of G.camps) if (!c.cleared && G.explored[idx(c.tx, c.ty)]){
     mctx.fillStyle = '#140d07'; mctx.fillRect(c.tx * S - 2 * S, c.ty * S - 2 * S, 4 * S, 4 * S);
@@ -7147,7 +7456,7 @@ function pickAt(wx, wy){
   const tx = tileOf(wx), ty = tileOf(wy);
   if (!inBounds(tx, ty) || !G.explored[idx(tx, ty)]) return null;
   const id = G.blocked[idx(tx, ty)];
-  if (id) return G.buildings.find(b => b.id === id) || G.mines.find(m => m.id === id) || null;
+  if (id) return G.buildings.find(b => b.id === id) || G.mines.find(m => m.id === id) || (G.mercs || []).find(m => m.id === id) || null;
   if (G.terrain[idx(tx, ty)] === T_TREE && !isBorderTile(tx, ty)) return { tree:true, x:tx, y:ty };
   // Pines are tall: their branches hang over the lower part of the tile above, so a tap there means that tree.
   if (inBounds(tx, ty + 1) && G.terrain[idx(tx, ty + 1)] === T_TREE && !isBorderTile(tx, ty + 1) && wy / TILE - ty > .3) return { tree:true, x:tx, y:ty + 1 };
@@ -7286,8 +7595,11 @@ let uiButtons = [];
 let buildMenu = false;   // true while the worker's "Build…" sub-menu is open
 let skillMenu = false;   // true while the hero's "Skills" sub-menu is open
 let itemMenu = -1;       // which inventory slot's Use/Drop/Sell menu is open (-1 = none)
+let invMenu = false;     // the hero's inventory (six slots) is open
+let shopMenu = false;    // the Market's item list is open
+let heroTrainMenu = false; // the Barracks' hero training is open
 
-function selectList(list){ selection = list; buildMenu = false; skillMenu = false; itemMenu = -1; refreshUI(); }
+function selectList(list){ selection = list; buildMenu = false; skillMenu = false; itemMenu = -1; invMenu = false; shopMenu = false; heroTrainMenu = false; refreshUI(); }
 
 let toastTimer = 0;
 function toast(msg, ms = 1800){
@@ -7323,6 +7635,8 @@ function statusText(u){
 }
 
 function describe(e){
+  if (e.kind === 'merc'){ const h = mercHero(e);
+    return `<h2>Mercenary camp</h2><div class="hint">${h ? nameOf(h) + ' can hire here.' : 'Bring a hero within ' + MERC_REACH + ' tiles to hire.'} Stock refills over time.</div>`; }
   if (e.kind === 'mine') return `<img class="por" src="${portraitURL('mine', 'mine', NEUTRAL)}" alt=""><h2>Gold mine</h2><div>${e.endless ? 'Plenty of' : Math.floor(e.gold)} gold left</div>`;
   if (e.kind === 'unit' && UNIT_TYPES[e.type].hero && e.owner === PLAYER && itemMenu >= 0 && e.items[itemMenu]){
     const I = ITEMS[e.items[itemMenu]];
@@ -7416,6 +7730,13 @@ function describeGroup(sel){
 function commandsFor(sel){
   const e = sel[0], out = [];
   const deselect = { label:'Deselect', ic:'cmd:deselect', act:() => selectList([]) };
+  if (e && e.kind === 'merc'){                              // hire mercenaries
+    const h = mercHero(e), P = G.players[PLAYER];
+    for (const o of MERC_OFFERS) out.push({ label:FACTIONS[CREEPS].names[o.type], ic:'unit:' + o.type,
+      sub:o.gold + 'g' + (o.wood ? ' ' + o.wood + 'w' : '') + ' · ' + (e.stock[o.type] || 0) + ' left', desc:UNIT_DESC[o.type],
+      off:!h || !(e.stock[o.type] > 0) || P.gold < o.gold || P.wood < o.wood, act:() => hireMerc(e, o) });
+    out.push(deselect); return out;
+  }
   if (e.owner !== PLAYER) return [deselect];
   if (e.kind === 'unit'){
     const hasWorker = sel.some(u => u.type === 'worker');
@@ -7441,6 +7762,16 @@ function commandsFor(sel){
     // If a hero is anywhere in the selection, its abilities are available,
     // so you can use them while your whole army is selected.
     const hero = sel.find(u => UNIT_TYPES[u.type].hero);
+    if (hero && invMenu && itemMenu < 0 && sel.length === 1){        // the inventory: six slots
+      for (let i = 0; i < slotsOf(hero); i++){
+        const k = hero.items[i];
+        if (!k){ out.push({ label:'Empty', ic:'cmd:empty', sub:'slot ' + (i + 1), off:true, act:() => toast('Clear creep camps or visit a Market for items') }); continue; }
+        const I = ITEMS[k];
+        out.push({ label:I.name, sub:I.short, desc:I.desc, icon:itemIcon(k), act:() => { itemMenu = i; } });   // opens Use / Drop / Sell
+      }
+      out.push({ label:'Back', ic:'cmd:back', act:() => { invMenu = false; } });
+      return out;
+    }
     if (hero && itemMenu >= 0 && sel.length === 1 && hero.items[itemMenu]){
       // Item menu: use it, drop it on the ground, or sell it at a Market.
       const i = itemMenu, k = hero.items[i], I = ITEMS[k], market = hasBuilding(PLAYER, 'market');
@@ -7474,12 +7805,12 @@ function commandsFor(sel){
       if (sel.length === 1)
         out.push({ label:'Skills', ic:'cmd:skills', sub:hero.skillPoints ? '+' + hero.skillPoints + ' to spend' : 'View', off:false, act:() => { skillMenu = true; } });
       out.push({ label:'Auto-cast', ic:'cmd:autocast', sub:hero.auto ? 'On' : 'Off', act:() => { hero.auto = !hero.auto; } });
-      if (sel.length === 1) for (let i = 0; i < ITEM_SLOTS; i++){
-        const k = hero.items[i];
-        if (!k){ out.push({ label:'Empty', ic:'cmd:empty', sub:'item slot', off:true, act:() => toast('Clear creep camps or visit a Market for items') }); continue; }
-        const I = ITEMS[k];
-        out.push({ label:I.name, sub:I.short, desc:I.desc, icon:itemIcon(k),
-                   act:() => { itemMenu = i; } });                      // opens Use / Drop / Sell
+      if (sel.length === 1){
+        const first = hero.items[0];
+        out.push({ label:hero.mounted ? 'Dismount' : 'Mount', ic:'unit:knight', sub:hero.mounted ? 'on foot' : '+60% speed',
+                   desc:hero.mounted ? 'Get down: normal armor again (riders have -2 armor).' : 'Ride: +60% speed and +2 damage, but -2 armor.', act:() => { toggleMount(hero); } });
+        out.push({ label:'Inventory', ...(first ? { icon:itemIcon(first) } : { ic:'cmd:empty' }), sub:hero.items.length + '/' + slotsOf(hero),
+                   desc:'Open the hero\'s six item slots: use, drop or sell items.', act:() => { invMenu = true; } });
       }
     }
     const casters = sel.filter(u => UNIT_TYPES[u.type].healer || UNIT_TYPES[u.type].caster);
@@ -7489,6 +7820,13 @@ function commandsFor(sel){
                  desc:'Spellcasters cast automatically (heal, buff, slow, curse). Turn off to save them for later.', act:() => casters.forEach(u => { u.auto = !on; }) });
     }
     // Retreat: run back to base without stopping to fight.
+    if (PROMOTE[e.type] && e.owner === PLAYER){                    // promote recruits and acolytes
+      for (const to of PROMOTE[e.type]){
+        const c = promoteCost(e.type, to), miss = promoteMissing(PLAYER, to);
+        out.push({ label:FACTIONS[PLAYER].names[to], ic:'unit:' + to, sub:miss || costText(c), desc:UNIT_DESC[to] || '', off:!!miss || !canAfford(PLAYER, c),
+          act:() => { for (const u of sel) if (u.type === e.type && !u.promoting && !promote(u, to)) break; } });
+      }
+    }
     if (sel.some(u => u.type !== 'worker')) out.push({ label:'Retreat', ic:'cmd:retreat', sub:G.buildings.some(b => b.owner === PLAYER) ? 'to base' : 'away', act:() => {
       const home = G.buildings.find(b => b.owner === PLAYER && b.type === 'townhall') || G.buildings.find(b => b.owner === PLAYER);
       let tx, ty;
@@ -7521,16 +7859,39 @@ function commandsFor(sel){
     const UP = nextUpgrade(e);
     if (UP && !e.queue.some(q => q.upgrade))
       out.push({ ic:e.type === 'tower' ? 'cmd:fortify' : 'cmd:upgrade', label:e.type === 'townhall' ? 'Upgrade to ' + FACTIONS[PLAYER].names['townhall' + (e.level + 1)] : e.type === 'tower' ? 'Fortify' : 'Upgrade',
-                 sub:costText(UP.cost), off:!canAfford(PLAYER, UP.cost), act:() => tryUpgrade(e) });
+                 sub:UP.recruit ? '1 Recruit' : costText(UP.cost), off:!canAfford(PLAYER, UP.cost) || (UP.recruit && !G.units.some(u => u.owner === PLAYER && u.type === 'recruit' && !u.dead)), act:() => tryUpgrade(e) });
     if (e.queue.length) out.push({ label:'Cancel', ic:'cmd:cancel', sub:'last in line', act:() => cancelTrain(e) });
   }
-  if (e.kind === 'building' && e.built >= 1 && BUILDING_TYPES[e.type].shop){
-    const h = playerHero(PLAYER);
-    for (const k in ITEMS) if (ITEMS[k].shop){
-      const I = ITEMS[k];
-      out.push({ label:I.name, sub:I.cost + 'g', desc:I.desc, icon:itemIcon(k), off:!h || h.items.length >= ITEM_SLOTS || G.players[PLAYER].gold < I.cost,
-                 act:() => buyItem(PLAYER, k) });
+  if (e.kind === 'building' && e.built >= 1 && e.type === 'barracks' && e.owner === PLAYER && kingdomLarva()){
+    const h = trainHero(e);
+    if (heroTrainMenu){
+      out.length = 0;                                        // only the training choices in this menu
+      const lc = h && levelUpCost(h);
+      out.push({ label:'Level up', ic:'cmd:skills', sub:!h ? 'bring a hero' : h.level >= 10 ? 'max level' : 'to ' + (h.level + 1) + ' · ' + costText(lc),
+                 desc:'The hero gains a level: a skill point, more health and damage.', off:!h || h.level >= 10 || !canAfford(PLAYER, lc), act:() => heroTrain(h, 'level') });
+      for (const T of HERO_TRAINING){
+        if (T.ranged && h && !UNIT_TYPES[h.type].ranged) continue;
+        const r = heroUpg(h, T.key);
+        out.push({ label:T.label, ic:'cmd:skills', sub:!h ? 'bring a hero' : r >= T.max ? 'done (' + r + '/' + T.max + ')' : r + '/' + T.max + ' · ' + costText(T.cost),
+                   desc:T.desc + (T.ranged ? ' (ranged heroes)' : '') + ', up to ' + T.max + ' times.', off:!h || r >= T.max || !canAfford(PLAYER, T.cost), act:() => heroTrain(h, T.key) });
+      }
+      out.push({ label:'Back', ic:'cmd:back', act:() => { heroTrainMenu = false; } });
+      return out;
     }
+    out.push({ label:'Hero training', ic:'cmd:skills', sub:h ? nameOf(h) : 'bring a hero',
+               desc:'Train a hero standing near this Barracks: buy levels, health, damage, armor, range or a bigger pack.', act:() => { heroTrainMenu = true; } });
+  }
+  if (e.kind === 'building' && e.built >= 1 && BUILDING_TYPES[e.type].shop){
+    const h = buyerHero(PLAYER), buyBtn = k => { const I = ITEMS[k];
+      return { label:I.name, sub:I.cost + 'g', desc:I.desc, icon:itemIcon(k), off:!h || h.items.length >= slotsOf(h) || G.players[PLAYER].gold < I.cost, act:() => buyItem(PLAYER, k) }; };
+    if (shopMenu){                                         // the item list
+      for (const k in ITEMS) if (ITEMS[k].shop) out.push(buyBtn(k));
+      if (G.shopSpecial){ const b = buyBtn(G.shopSpecial); b.sub = ITEMS[G.shopSpecial].cost + 'g · special'; out.push(b); }
+      out.push({ label:'Back', ic:'cmd:back', act:() => { shopMenu = false; } });
+      return out;
+    }
+    out.push({ label:'Items', ...(G.shopSpecial ? { icon:itemIcon(G.shopSpecial) } : { ic:'cmd:empty' }), sub:G.shopSpecial ? 'special: ' + ITEMS[G.shopSpecial].name.replace(/^.* (\+\d)$/, '$1') : 'for heroes',
+               desc:'Buy items for your hero. A stronger special item is offered too, changing every few minutes.', act:() => { shopMenu = true; } });
     const mk = marketOf(PLAYER);
     out.push({ label:'Sell lumber', ic:'cmd:sell', sub:'100w→' + Math.round(mk.sell) + 'g', desc:'Sell 100 lumber. Each sale lowers the price a little; it recovers over time.', off:G.players[PLAYER].wood < 100, act:() => trade(PLAYER, true) });
     out.push({ label:'Buy lumber', ic:'cmd:buy', sub:Math.round(mk.buy) + 'g→100w', desc:'Buy 100 lumber. Each purchase raises the price a little; it recovers over time.', off:G.players[PLAYER].gold < mk.buy, act:() => trade(PLAYER, false) });
@@ -7554,6 +7915,10 @@ function refreshUI(){
   $('#wood').textContent = Math.floor(P.wood);
   const noBase = G.mission && !G.buildings.some(b => b.owner === PLAYER);    // a squad without a base: no food to count
   $('#food').textContent = noBase ? f.used : f.used + '/' + f.cap;
+  { const up = upkeepOf(PLAYER), box = $('#foodBox');
+    box.classList.toggle('upLow', up.rate === .7); box.classList.toggle('upHigh', up.rate === .4);
+    box.title = up.label + (up.rate < 1 ? ': gold income ' + Math.round(up.rate * 100) + '%' : '');
+    if (G.upkeepShown !== up.label){ if (G.upkeepShown) toast(up.label + (up.rate < 1 ? ': your workers bring in ' + Math.round(up.rate * 100) + '% gold' : ': full gold income again'), 3000); G.upkeepShown = up.label; } }
   const hasSoldiers = selection.some(u => u.kind === 'unit' && u.owner === PLAYER && u.type !== 'worker' && !u.dead);
   $('#amBtn').hidden = !hasSoldiers || !!(G && G.place);
   $('#stBtn').hidden = $('#amBtn').hidden;
@@ -7933,7 +8298,10 @@ function update(dt){
   if (G.items.length) G.items = G.items.filter(it => !it.taken);
   if (selection.some(e => e.dead)) selectList(selection.filter(e => !e.dead));
 
-  if (G.time >= G.endAt){ G.endAt = G.time + 1; checkEnd(); regrowTrees(); campGrowth(1); marketDrift(1);
+  if (G.time >= G.endAt){ G.endAt = G.time + 1; checkEnd(); regrowTrees(); campGrowth(1); marketDrift(1); mercTick(); recruitTick();
+    if (G.time >= (G.shopSpecialAt || 0)){                 // the Market's special offer changes every three minutes
+      const ks = Object.keys(ITEM_TIERS); G.shopSpecialAt = G.time + 180;
+      G.shopSpecial = ks[Math.floor(Math.random() * ks.length)] + (Math.random() < .15 ? '+2' : '+1'); }
     for (const u of G.units){
       if (u.expires && G.time > u.expires) u.dead = true;
       if (u.master && !u.order){ const m = G.units.find(x => x.id === u.master && !x.dead); if (m && Math.hypot(m.x - u.x, m.y - u.y) > 4 * TILE) orderMove([u], m.x + TILE, m.y + TILE); }   // dogs follow
@@ -8220,6 +8588,7 @@ function showHowTo(back){
       <li>Long-press any button to see what it does. The worker icon (bottom left) finds idle workers.</li>
       <li>Save from the pause menu. The game also autosaves every minute and when you leave the app: tap Continue on the main menu.</li>
       <li>New to the game? Start with the Campaign: its first mission teaches the basics.</li>
+      <li>Upkeep: above 40 food your workers bring in 70% of the gold, above 70 food only 40%. The food counter shows it.</li>
       <li>High ground matters: units below a cliff can't see what's on top, and arrows shot uphill often miss. Climb the ramps.</li>
       <li>Destroy every enemy building to win.</li>
     </ul>
@@ -8364,6 +8733,7 @@ function loadGame(slot){
   G.blocked.fill(0);
   for (const b of G.buildings) markBlocked(b, b.id);
   for (const m of G.mines) markBlocked(m, m.id);
+  for (const m of G.mercs || []) markBlocked(m, m.id);
   if (!G.ai || !G.ai[ENEMY]) G.ai = { [ENEMY]:{ ...data.ai } };   // older saves kept one AI's plans outside G
   AI = G.ai[ENEMY];
   selection = [];
@@ -8424,9 +8794,133 @@ const raidersLeft = () => G.units.filter(u => u.owner === ENEMY).length;
 const enemyBuildings = type => G.buildings.filter(b => b.owner === ENEMY && (!type || b.type === type)).length;
 const playerHall = () => G.buildings.find(b => b.owner === PLAYER && b.type === 'townhall') || G.buildings.find(b => b.owner === PLAYER);
 
+// LESSON: Every hero can ride. Mounted: +60% speed and +2 damage, but -2 armor;
+// on foot: the normal stats. Switching takes a moment (3s cooldown), so it is a
+// choice: ride to travel, chase or escape, get down to hold a line.
+function toggleMount(h){
+  if (!h || h.dead || !UNIT_TYPES[h.type].hero) return false;
+  if (G.time < (h.mountReady || 0)) return fail(h.owner, 'Wait a moment before switching again');
+  h.mounted = !h.mounted; h.mountReady = G.time + 3;
+  G.effects.push({ type:'ring', x:h.x, y:h.y, color:'#e8c547', life:.4, max:.4, r:14 });
+  if (h.owner === PLAYER){ sfx(h.mounted ? 'ack' : 'click'); }
+  return true;
+}
+// ----- Hero training at the Barracks (your Kingdom) -----
+// LESSON: Spending gold on heroes. A hero standing near a Barracks can be
+// trained: bought a level, or given lasting upgrades (health, damage, armor,
+// range, a bigger pack). Each hero keeps its own upgrades in h.upg.
+const HERO_TRAINING = [
+  { key:'hp',    label:'Toughness',      desc:'+80 health',            max:3, cost:{ gold:120, wood:0 } },
+  { key:'dmg',   label:'Weapon drill',   desc:'+2 damage',             max:3, cost:{ gold:150, wood:50 } },
+  { key:'armor', label:'Armor drill',    desc:'+1 armor',              max:2, cost:{ gold:140, wood:60 } },
+  { key:'range', label:'Marksmanship',   desc:'+1 attack range',       max:2, cost:{ gold:160, wood:80 }, ranged:true },
+  { key:'slots', label:'Pack mule',      desc:'+1 inventory slot',     max:2, cost:{ gold:200, wood:0 } },
+];
+const HERO_TRAIN_REACH = 6;
+const heroUpg = (h, k) => (h && h.upg && h.upg[k]) || 0;
+const levelUpCost = h => ({ gold:100 + 50 * h.level, wood:0 });
+// The hero who trains at this Barracks: the selected/buyer hero if close enough, else any hero close enough.
+function trainHero(b){
+  const c = centerOf(b), near = h => h && !h.dead && Math.hypot(h.x - c.x, h.y - c.y) / TILE <= HERO_TRAIN_REACH;
+  const bh = buyerHero(PLAYER); return near(bh) ? bh : heroesOf(PLAYER).find(near) || null;
+}
+function heroTrain(h, what){
+  if (!h) return fail(PLAYER, 'Bring a hero to the Barracks');
+  if (what === 'level'){
+    if (h.level >= 10) return fail(PLAYER, 'Already at the highest level');
+    const c = levelUpCost(h); if (!canAfford(PLAYER, c)) return fail(PLAYER, 'Not enough gold');
+    pay(PLAYER, c); addXP(h, Math.max(1, xpNeeded(h.level) - h.xp));
+  } else {
+    const T = HERO_TRAINING.find(t => t.key === what);
+    if (heroUpg(h, what) >= T.max) return fail(PLAYER, 'Fully trained');
+    if (!canAfford(PLAYER, T.cost)) return fail(PLAYER, 'Not enough resources');
+    pay(PLAYER, T.cost); h.upg = h.upg || {}; h.upg[what] = heroUpg(h, what) + 1;
+    if (what === 'hp'){ const add = Math.round(50 * HP_SCALE); h.maxHp += add; h.hp += add; }
+  }
+  G.effects.push({ type:'ring', x:h.x, y:h.y, color:'#5aa8ff', life:.6, max:.6, r:18 }); sfx('levelup');
+  return true;
+}
+
+// Place a finished building at the nearest spot where it fits.
+function putNear(type, owner, tx, ty){
+  for (let r = 0; r < 8; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++)
+    if (Math.max(Math.abs(dx), Math.abs(dy)) === r && canPlace(type, tx + dx, ty + dy, owner, 1)) return placeBuilding(type, owner, tx + dx, ty + dy, true);
+  return null;
+}
+// ----- Kingdom recruits and acolytes -----
+// LESSON: Promotion instead of training. The Kingdom raises its soldiers from
+// common folk: Barracks train Recruits and Temples train Acolytes, and you
+// promote them into Footmen, Longbowmen, Knights, Priests or Sorceresses. A
+// promotion costs the difference in price and takes a little time. (The
+// Kingdom AI trains the finished units directly, at the same total cost.)
+const PROMOTE = { recruit:['worker', 'footman', 'archer', 'knight'], acolyte:['priest', 'mage'] };
+const PROMOTE_NEEDS = { worker:['townhall'], footman:['barracks'], archer:['barracks'], knight:['stable'], priest:['temple'], mage:['temple'] };
+const VIA_PROMOTION = new Set(['worker', 'footman', 'archer', 'knight', 'priest', 'mage', 'recruit', 'acolyte']);
+// LESSON: Larva, as in StarCraft. For the Kingdom you play, town halls and Barracks
+// produce Recruits by themselves (and Temples produce Acolytes) until the population
+// is full. Nothing is trained: every worker and soldier is a promoted Recruit.
+// Kingdom farms hold only 2; upgrading one (which costs a Recruit, who goes to work
+// it) brings it to 4. The orcs, and the Kingdom when the AI plays it, are unchanged.
+const kingdomLarva = () => G && !isOrc(PLAYER) && !(G.mission && MISSIONS[G.mission.key].setup.roster);
+const RECRUIT_FROM = { barracks:['recruit', 10], temple:['acolyte', 12] };
+// (setupBase runs before the mission is known, so it asks the settings directly.)
+const KINGDOM_START_GOLD = 200;
+const kingdomLarvaStart = () => (FACTIONS[PLAYER] && !FACTIONS[PLAYER].horns) && !(PENDING_ROSTER);
+let PENDING_ROSTER = false;
+function recruitTick(){                                     // once a second
+  if (!kingdomLarva()) return;
+  const f = foodOf(PLAYER); let room = f.cap - f.used;
+  for (const b of G.buildings){
+    if (room <= 0) break;
+    const R = RECRUIT_FROM[b.type];
+    if (!R || b.owner !== PLAYER || b.built < 1 || !techAllows('unit', R[0])) continue;
+    if (b.genAt == null){ b.genAt = G.time + R[1]; continue; }
+    if (G.time < b.genAt) continue;
+    b.genAt = G.time + R[1];
+    const c = centerOf(b), sp = nearestFreeTile(tileOf(c.x), b.ty + b.size + 1);
+    const u = spawnUnit(R[0], PLAYER, (sp.x + .5) * TILE, (sp.y + .5) * TILE);
+    if (b.rally) orderMove([u], b.rally.x, b.rally.y);
+    room--;
+  }
+}
+const KFARM_UP = { cost:{ gold:0, wood:0 }, time:10, recruit:true };     // a Kingdom farm upgrade: one Recruit
+const promoteCost = (from, to) => { const a = UNIT_TYPES[from].cost, b = UNIT_TYPES[to].cost; return { gold:Math.max(0, b.gold - a.gold), wood:Math.max(0, b.wood - a.wood) }; };
+function promoteMissing(owner, to){
+  if (!techAllows('unit', to)) return 'not available yet';
+  const miss = missingReq(owner, [...PROMOTE_NEEDS[to], ...(UNIT_TYPES[to].needs || [])]);
+  return miss ? 'needs ' + reqName(owner, miss) : null;
+}
+function promote(u, to){
+  const owner = u.owner, T = UNIT_TYPES[to], c = promoteCost(u.type, to), P = G.players[owner];
+  if (u.promoting || u.dead) return false;
+  const miss = promoteMissing(owner, to); if (miss) return fail(owner, miss[0].toUpperCase() + miss.slice(1));
+  if (P.gold < c.gold) return fail(owner, 'Not enough gold');
+  if (P.wood < c.wood) return fail(owner, 'Not enough lumber');
+  const extra = T.food - UNIT_TYPES[u.type].food, f = foodOf(owner);
+  if (extra > 0 && f.used + extra > f.cap) return fail(owner, 'Build more farms');
+  pay(owner, c);
+  u.promoting = { to, t0:G.time, dur:Math.max(4, Math.round(T.time * .6)) };
+  setOrder(u, null);
+  return true;
+}
+// Called every frame for a unit being promoted: it stands still until it's done.
+function promoteTick(u){
+  const pr = u.promoting;
+  if (G.time - pr.t0 < pr.dur) return;
+  const n = spawnUnit(pr.to, u.owner, u.x, u.y);
+  n.stance = u.stance; u.promoting = null; u.dead = true;          // the recruit becomes the new soldier
+  if (selection.includes(u)){ selection = selection.map(x => x === u ? n : x); refreshUI(); }
+  if (u.owner === PLAYER){ toast(nameOf(n) + ' ready'); sfx('ack'); }
+}
+
 function sendRaiders(types){
   const hall = playerHall(), c = hall ? centerOf(hall) : { x:TILE * 12, y:TILE * 12 };
-  const from = G.mission && G.mission.raidFrom ? nearestFreeTile(...G.mission.raidFrom) : nearestFreeTile(MAP_W - 16, MAP_H - 16);
+  let from = G.mission && G.mission.raidFrom ? nearestFreeTile(...G.mission.raidFrom) : nearestFreeTile(MAP_W - 16, MAP_H - 16);
+  if (G.mission && G.mission.camps){                           // waves march out of a camp that still stands
+    const alive = G.mission.camps.map(id => G.buildings.find(b => b.id === id && isAlive(b))).filter(Boolean);
+    if (!alive.length) return [];
+    const c = centerOf(alive[Math.floor(Math.random() * alive.length)]); from = nearestFreeTile(tileOf(c.x), tileOf(c.y) + 3);
+  }
   const band = types.map((t, i) => { const s = nearestFreeTile(from.x + (i % 3), from.y + Math.floor(i / 3)); return spawnUnit(t, ENEMY, (s.x + .5) * TILE, (s.y + .5) * TILE); });
   orderMove(band, c.x, c.y, true);
   G.ping = { x:band[0].x, y:band[0].y, t:G.time };
@@ -8533,15 +9027,19 @@ const MISSIONS = {
     setup:{ map:'eastbrook', size:'eastbrook', enemyBase:false, creeps:false },
     steps:[
       { text:N => `Put your ${plural(N.worker).toLowerCase()} to work: gather gold`,
-        hint:N => `Tap a ${N.worker.toLowerCase()}, then tap the glowing gold mine. Double-tap a ${N.worker.toLowerCase()} to select all of them.`,
+        hint:N => N.recruit && kingdomLarva() ? `Your ${plural(N.recruit)} can't work yet: select them, tap ${N.worker} to make them ${plural(N.worker).toLowerCase()}, then tap the glowing gold mine.`
+                                               : `Tap a ${N.worker.toLowerCase()}, then tap the glowing gold mine. Double-tap a ${N.worker.toLowerCase()} to select all of them.`,
         check:() => G.units.some(u => u.owner === PLAYER && u.type === 'worker' && u.order && u.order.type === 'gather' && u.order.res === 'gold'),
         glow:() => G.mines[0] },
       { text:N => `Build 3 ${plural(N.farm)}`, need:3, count:() => countBuilt('farm'),
-        hint:N => `${plural(N.farm)} give food, so you can train more units. Select a ${N.worker.toLowerCase()}, tap Build…, choose ${N.farm}, place it, then press Confirm.` },
+        hint:N => (N.recruit && kingdomLarva() ? `${plural(N.farm)} give food: room for more ${plural(N.recruit)}. Yours hold 2 each; upgrading one (it costs a ${N.recruit}) makes it 4. `
+                                                : `${plural(N.farm)} give food, so you can train more units. `) + `Select a ${N.worker.toLowerCase()}, tap Build…, choose ${N.farm}, place it, then press Confirm.` },
       { text:N => `Build a ${N.barracks}`, need:1, count:() => countBuilt('barracks'),
-        hint:N => `The ${N.barracks} trains soldiers. It costs lumber too: send a ${N.worker.toLowerCase()} to chop a tree.` },
+        hint:N => (N.recruit && kingdomLarva() ? `The ${N.barracks} sends out a ${N.recruit} every 10 seconds while there is room. ` : `The ${N.barracks} trains soldiers. `)
+                  + `It costs lumber too: send a ${N.worker.toLowerCase()} to chop a tree.` },
       { text:N => `Train 5 ${plural(N.footman)}`, need:5, count:() => G.units.filter(u => u.owner === PLAYER && u.type === 'footman').length,
-        hint:N => `Select the ${N.barracks} and tap ${N.footman}. Keep your ${plural(N.worker).toLowerCase()} gathering: soldiers cost gold.` },
+        hint:N => N.recruit ? `Your ${N.barracks} sends out ${plural(N.recruit)} by itself; select them and tap ${N.footman}. Upgrade ${plural(N.farm).toLowerCase()} (each costs a ${N.recruit}) for more room. Keep your ${plural(N.worker).toLowerCase()} gathering: soldiers cost gold.`
+                            : `Select the ${N.barracks} and tap ${N.footman}. Keep your ${plural(N.worker).toLowerCase()} gathering: soldiers cost gold.` },
       { text:() => 'Raiders are coming! Defeat them', count:raidersLeft, countdown:true,
         hint:() => 'Tap Army to select all your soldiers, then tap an enemy to attack, or tap the ⚔ Attack button and then the ground to fight your way there.',
         start:() => sendRaiders(['footman', 'footman', rangedOf(ENEMY)]) },
@@ -8564,14 +9062,26 @@ const MISSIONS = {
   ford: {
     name:'Hold the Ford',
     brief:'An orc warband is gathering across the river. The fords are the only way over. Fortify them, then hold the line until our reinforcements arrive.',
-    setup:{ map:'fords', size:'fords', faction:'kingdom', enemyBase:false, creeps:false, gold:900, wood:500, extra:() => { giveHero(2); G.mission.raidFrom = FORDS_MAP.stage; } },
+    setup:{ map:'fords', size:'fords', faction:'kingdom', enemyBase:false, creeps:false, gold:900, wood:500, extra:() => {
+      giveHero(2); G.mission.raidFrom = FORDS_MAP.stage;
+      // A head start: a barracks, two farms and a lumber mill next to your town hall.
+      const hall = playerHall();
+      for (const [t, dx, dy] of [['barracks', 5, -2], ['farm', -4, 4], ['farm', -1, 5], ['lumbermill', 4, 4]]) putNear(t, PLAYER, hall.tx + dx, hall.ty + dy);
+      // Two enemy camps across the river; the waves come out of them.
+      G.mission.camps = FORDS_MAP.camps.map(([cx, cy]) => {
+        const h = putNear('townhall', ENEMY, cx - 1, cy - 1);
+        putNear('barracks', ENEMY, cx + 3, cy - 1); putNear('farm', ENEMY, cx - 4, cy + 2); putNear('farm', ENEMY, cx - 1, cy + 3);
+        const t = putNear('tower', ENEMY, cx - 5, cy - 2); if (t && !isOrc(ENEMY)) t.level = 2;   // a Kingdom tower must be a Guard tower to shoot
+        return h && h.id;
+      }).filter(Boolean);
+    } },
     steps:[
       { text:N => `Build 2 ${plural(isOrc(PLAYER) ? N.tower : N.tower2)}`, need:2,
         count:() => G.buildings.filter(b => b.owner === PLAYER && b.type === 'tower' && b.built >= 1 && towerTier(b) >= 1).length,
         hint:N => isOrc(PLAYER) ? `${plural(N.tower)} shoot enemies on their own. Build them near the fords on your side of the river (see the minimap).`
                                 : 'Build Watch towers near the fords, then upgrade each one to a Guard tower so it shoots. Watch towers alone only see.' },
       { text:() => 'Hold the fords', survive:360,
-        hint:() => 'Enemy waves will cross every minute, each larger than the last. Keep training soldiers and repair your towers between waves.',
+        hint:N => 'Enemy waves will cross every minute, each larger than the last. ' + (N.recruit && kingdomLarva() ? `Keep promoting ${plural(N.recruit)} into soldiers` : 'Keep training soldiers') + ' and repair your towers between waves.',
         tick:() => {
           const t = G.time - G.mission.t0, wave = Math.floor(t / 55);
           if (wave >= (G.mission.waves || 0) && t < 340){
@@ -8580,11 +9090,13 @@ const MISSIONS = {
             for (let i = 0; i < n; i++) band.push(i % 3 === 2 ? rangedOf(ENEMY) : 'footman');
             if (wave === 3 || wave === 5) band.push('knight');
             if (wave >= 5) band.push(siegeOf(ENEMY));
-            sendRaiders(band); toast('Wave ' + (wave + 1) + ' is crossing the river!');
+            if (sendRaiders(band).length) toast('Wave ' + (wave + 1) + ' is crossing the river!');
           }
         } },
+      { text:N => `Destroy both enemy ${plural(FACTIONS[ENEMY].names.townhall)}`, count:() => enemyBuildings('townhall'), countdown:true,
+        hint:() => 'The fords held. Now strike back: cross the river and burn both camps. Every camp you destroy sends no more waves.' },
     ],
-    done:'The fords held. The warband broke on your towers and fled back into the woods.',
+    done:'The fords held, and both enemy camps across the river are ashes.',
   },
   woods: {
     name:'Into the Deep Woods',
@@ -8592,7 +9104,7 @@ const MISSIONS = {
     setup:{ map:'mirkholt', size:'mirkholt', faction:'kingdom', enemyBase:true, creeps:true, difficulty:'easy', extra:() => { giveHero(2); } },
     steps:[
       { text:N => `Destroy the orc ${FACTIONS[ENEMY].names.townhall}`, count:() => enemyBuildings('townhall'), countdown:true,
-        hint:() => 'The orcs are in the far corner. Build a Barracks, train an army, then send it along the forest roads. Siege engines help against buildings.' },
+        hint:N => 'The orcs are in the far corner. ' + (N.recruit && kingdomLarva() ? `Build ${plural(N.barracks).toLowerCase()} for ${plural(N.recruit)}, promote them into an army` : 'Build a Barracks, train an army') + ', then send it along the forest roads. Siege engines help against buildings.' },
     ],
     done:'The Stronghold burns. The orcs are scattered, but their war chief has fled north to the Frozen Pass.',
   },
@@ -8648,7 +9160,7 @@ const MISSIONS = {
 // build menu, training, research, upgrades and the AI alike.
 const TECH_UNLOCKS = [
   null,
-  { units:['worker', 'footman', 'scout'], buildings:['townhall', 'farm', 'barracks'], research:[] },                               // 1
+  { units:['worker', 'footman', 'scout', 'recruit'], buildings:['townhall', 'farm', 'barracks'], research:[] },                               // 1
   { units:['archer', 'javelin', 'hero'], buildings:['lumbermill', 'tower'], research:['fletching', 'tools'] },           // 2
   { buildings:['blacksmith', 'market'], research:['weapons', 'armor', 'toughness', 'shields', 'pillage'] },             // 3
   { research:['longbows', 'masonry'], upgrades:['tower', 'farm'] },                                                      // 4
@@ -8657,7 +9169,7 @@ const TECH_UNLOCKS = [
     research:['tools2', 'weapons2', 'armor2', 'barding', 'masonry2', 'fletching2', 'veterans', 'thickhides', 'discipline', 'marksman', 'berserk', 'ballistics'] },   // 6
   { units:['scorpion', 'cannon'] },                                                                                     // 7
   {},                                                                                                                   // 8
-  { units:['priest', 'mage', 'healer'], buildings:['temple'], hall:3, all:true },                                      // 9: everything else
+  { units:['priest', 'mage', 'healer', 'acolyte'], buildings:['temple'], hall:3, all:true },                                      // 9: everything else
   { all:true },                                                                                                         // 10
 ];
 function techSet(level){
@@ -8672,6 +9184,7 @@ function techSet(level){
 }
 // kind: 'unit', 'building', 'research', 'upgrade' (of a building type), or 'hall' (a town hall level)
 function techAllows(kind, key){
+  if ((kind === 'unit' || kind === 'building') && G && G.banned && G.banned.includes(key)) return false;   // switched off by the map's rules
   if (kind === 'unit' && G && G.mission && Object.values(MISSIONS[G.mission.key].setup.roster || {}).some(l => l.includes(key))) return true;   // a mission's own units
   if (!G || !G.tech) return true;
   const T = techSet(G.tech);
@@ -8831,7 +9344,7 @@ function trialRound(types){
 }
 function trialReward(key){
   const h = heroesOf(PLAYER)[0]; if (!h) return;
-  if (h.items.length < ITEM_SLOTS) giveItem(h, key);
+  if (h.items.length < slotsOf(h)) giveItem(h, key);
   h.hp = h.maxHp;
   toast('Round won! The crowd cheers and tosses you: ' + ITEMS[key].name + '. You are fully healed.', 3500); sfx('victory');
 }
@@ -9258,6 +9771,7 @@ const missionUnlocked = (i, list = CAMPAIGN) => UNLOCK_ALL_MISSIONS || i === 0 |
 
 function startMission(key){
   const M = MISSIONS[key], S = M.setup;
+  PENDING_ROSTER = !!S.roster;                              // (the lumber missions keep workers and their own units)
   const keep = { ...settings };
   // Campaign difficulty shifts every enemy AI one level down or up.
   const LV = ['easy', 'normal', 'hard'], shift = { easy:-1, normal:0, hard:1 }[campDiff] || 0;
@@ -9266,6 +9780,7 @@ function startMission(key){
   Object.assign(settings, { map:S.map, size:S.size, faction:S.faction || settings.faction, difficulty:d,
                             opponents:S.opponents || 1, teams:S.teams || [1, 2, 3, 4], aiDiff:(S.aiDiff || [d, d, d]).map(x => S.aiDiff ? move(x) : x) });
   newGame();
+  PENDING_ROSTER = false;
   G.enemyMult = { easy:.75, normal:1, hard:1.25 }[campDiff] || 1;   // scripted enemies are weaker or tougher
   Object.assign(settings, keep);                          // your own skirmish settings stay as they were
   if (!S.enemyBase){
@@ -9285,17 +9800,25 @@ function startMission(key){
     G.units = G.units.filter(u => u.owner !== PLAYER);
   }
   for (const c of G.camps) c.lairWas = !!c.lair;          // so "burn N lairs" can count destroyed ones
-  if (S.gold) G.players[PLAYER].gold = S.gold;
+  if (S.gold) G.players[PLAYER].gold = S.gold + (kingdomLarvaStart() && !S.noBase && !S.roster ? KINGDOM_START_GOLD : 0);
   if (S.wood) G.players[PLAYER].wood = S.wood;
   G.mission = { key, step:0, started:false, t0:0, diff:campDiff };   // the difficulty this mission was started on
   if (MAP_LAYOUTS[G.map] && MAP_LAYOUTS[G.map].raidFrom) G.mission.raidFrom = MAP_LAYOUTS[G.map].raidFrom;   // where raiders come from
   G.tech = M.tech || 0;                                    // campaign tech level (0 = everything allowed)
   if (S.extra) S.extra();                                 // mission-specific units, cages, heroes
+  // Your Kingdom gets its soldiers from Recruits, so outside the tutorial a mission with a
+  // base starts with a Barracks already standing: Recruits flow from the first minute.
+  if (kingdomLarva() && key !== 'training'){
+    const hall = playerHall();
+    if (hall && !G.buildings.some(b => b.owner === PLAYER && b.type === 'barracks') && techAllows('building', 'barracks')) putNear('barracks', PLAYER, hall.tx + 5, hall.ty - 2);
+    // Heroes and siege engines handed out by a mission use food too: add farms until there is room for a few Recruits.
+    for (let n = 0; hall && n < 6 && foodOf(PLAYER).cap < foodOf(PLAYER).used + 4; n++) if (!putNear('farm', PLAYER, hall.tx - 5 + (n % 3) * 3, hall.ty + 5 + Math.floor(n / 3) * 3)) break;
+  }
   resetTerrainCache(); updateFog();
   startBattle();
   missionTick(true);
 }
-let objCollapsed = false;
+let objCollapsed = true;                                   // folded by default: tap the little scroll to open it
 function missionTick(force){
   const M = G && G.mission && MISSIONS[G.mission.key];
   const box = $('#objBox');
@@ -9372,8 +9895,9 @@ function showBriefing(key, inGame = false){
     ${(M.bonus || []).length ? `<p class="how" style="margin-bottom:6px">Bonus objectives on ${DIFFICULTY[campDiff].label} (one star each)</p>
     <ul class="how">${M.bonus.map(b => `<li>☆ ${b.text}</li>`).join('')}</ul>` : ''}
     ${missionStars()[starKey(key)] ? `<p class="how">Your best on ${DIFFICULTY[campDiff].label}: <span style="color:var(--brass)">${starsText(missionStars()[starKey(key)])}</span></p>` : ''}
-    <div class="row">${inGame ? '' : '<button class="big" id="startBtn">Start mission</button>'}<button ${inGame ? 'class="big"' : ''} id="backBtn">Back</button></div>`, { menu:!inGame });
+    <div class="row">${inGame ? '' : '<button class="big" id="startBtn">Start mission</button>'}${!inGame && campaignDone().includes(key) ? '<button id="editMapBtn">Edit map</button>' : ''}<button ${inGame ? 'class="big"' : ''} id="backBtn">Back</button></div>`, { menu:!inGame });
   $('#backBtn').onclick = inGame ? showPause : () => showCampaign();
+  if ($('#editMapBtn')) $('#editMapBtn').onclick = () => editorFromMission(key);
   if (inGame) return;
   $('#startBtn').onclick = () => { audioInit(); startMission(key); };
 }
@@ -9386,9 +9910,9 @@ function showBriefing(key, inGame = false){
 // rebuild it exactly, and a map can be shared as one long code.
 let ED = null, USER_MAP = null;
 const ED_SIZES = { small:{ label:'Small', n:64 }, normal:{ label:'Normal', n:96 }, large:{ label:'Large', n:128 } };
-const ED_TOOLS = [['grass', 'Grass'], ['tree', 'Forest'], ['water', 'Water'], ['dirt', 'Road'], ['rock', 'Wall'], ['high', 'High ground'], ['low', 'Low ground'], ['ramp', 'Ramp'],
-                  ['mine', 'Gold mine'], ['start', 'Start'], ['camp_small', 'Camp S'], ['camp_medium', 'Camp M'], ['camp_big', 'Camp L'], ['erase', 'Eraser'], ['pan', 'Move']];
-const ED_PAINT = { grass:T_GRASS, tree:T_TREE, water:T_WATER, dirt:T_DIRT, rock:T_ROCK };
+const ED_TOOLS = [['grass', 'Grass'], ['tree', 'Forest'], ['water', 'Water'], ['dirt', 'Road'], ['sand', 'Sand'], ['swamp', 'Swamp'], ['rocks', 'Rocks'], ['rock', 'Wall'],
+                  ['high', 'High ground'], ['low', 'Low ground'], ['ramp', 'Ramp'], ['mine', 'Gold mine'], ['merc', 'Merc camp'], ['start', 'Start'], ['camp', 'Camp'], ['erase', 'Eraser'], ['pan', 'Move']];
+const ED_PAINT = { grass:T_GRASS, tree:T_TREE, water:T_WATER, dirt:T_DIRT, rock:T_ROCK, sand:T_SAND, swamp:T_SWAMP, rocks:T_BOULDER };
 function userMaps(){ try { return JSON.parse(localStorage.getItem('bov-maps') || '[]'); } catch (e){ return []; } }
 function saveUserMaps(list){ try { localStorage.setItem('bov-maps', JSON.stringify(list)); return true; } catch (e){ toast('Could not save: storage is full'); return false; } }
 const mapCode = data => btoa(unescape(encodeURIComponent(JSON.stringify(data))));
@@ -9435,9 +9959,15 @@ function edPlaceMine(x, y){
 function edObjectAt(wx, wy){
   const tx = tileOf(wx), ty = tileOf(wy);
   if (ED.tool === 'mine'){ for (const [x, y] of edMirrors(tx, ty)) edPlaceMine(x - 1, y - 1); return; }
+  if (ED.tool === 'merc'){ for (const [x, y] of edMirrors(tx, ty)){ let ok = true;
+      for (let yy = y - 2; yy <= y + 2 && ok; yy++) for (let xx = x - 2; xx <= x + 2 && ok; xx++) ok = inBounds(xx, yy) && !G.blocked[idx(xx, yy)];
+      if (ok){ placeMerc(x - 1, y - 1); for (let yy = y - 1; yy <= y + 1; yy++) for (let xx = x - 1; xx <= x + 1; xx++) terrainChanged(xx, yy); } } return; }
   if (ED.tool === 'start'){ ED.starts[ED.startNo] = [tx - 1, ty - 1]; toast('Start ' + ED.startNo + ' placed'); ED.startNo = ED.startNo % 4 + 1; edPanel(); return; }
-  if (ED.tool.startsWith('camp_')){ for (const [x, y] of edMirrors(tx, ty)) if (inBounds(x, y) && isWalkable(x, y)) ED.camps.push({ x, y, tier:ED.tool.slice(5) }); return; }
+  if (ED.tool === 'camp'){ const units = CREEP_GROUPS[ED.campGroup][ED.campSize];
+    for (const [x, y] of edMirrors(tx, ty)) if (inBounds(x, y) && isWalkable(x, y)) ED.camps.push({ x, y, tier:ED.campSize, units:units ? units.slice() : undefined, group:ED.campGroup }); return; }
   if (ED.tool === 'erase') for (const [x, y] of edMirrors(tx, ty)){
+    const mc = (G.mercs || []).find(m => x >= m.tx - 1 && x <= m.tx + 3 && y >= m.ty - 1 && y <= m.ty + 3);
+    if (mc){ markBlocked(mc, 0); G.mercs = G.mercs.filter(o => o !== mc); }
     const m = G.mines.find(m => x >= m.tx - 1 && x <= m.tx + 3 && y >= m.ty - 1 && y <= m.ty + 3);
     if (m){ markBlocked(m, 0); G.mines = G.mines.filter(o => o !== m); for (let yy = m.ty; yy < m.ty + 3; yy++) for (let xx = m.tx; xx < m.tx + 3; xx++) terrainChanged(xx, yy); }
     for (const k in ED.starts){ const s = ED.starts[k]; if (Math.hypot(s[0] + 1 - x, s[1] + 1 - y) < 2.5) delete ED.starts[k]; }
@@ -9456,16 +9986,22 @@ function drawEditorOverlay(){
     const x = (c.x + .5) * TILE, y = (c.y + .5) * TILE;
     disc(ctx, x, y, 12, 'rgba(110,20,20,.7)'); ctx.fillStyle = '#ffe9c0'; ctx.font = 'bold 12px monospace';
     ctx.fillText({ small:'S', medium:'M', big:'L' }[c.tier], x - 4, y + 4);
+    if (c.group && c.group !== 'standard'){ ctx.font = '9px monospace'; ctx.fillText(CREEP_GROUPS[c.group].label, x - 18, y + 22); }
   }
 }
 function edPanel(){
   if (!ED) return;
-  const hint = { start:`Tap to place start ${ED.startNo} (1 is you; up to 4).`, mine:'Tap to place a gold mine.', erase:'Tap a mine, start or camp to remove it.', pan:'Drag to move around the map.',
+  const hint = { merc:'Tap to place a mercenary camp.', camp:'Tap to place a creature camp.', swamp:'Swamp slows everyone who wades through it.', rocks:'Boulders block movement, like a wall.', start:`Tap to place start ${ED.startNo} (1 is you; up to 4).`, mine:'Tap to place a gold mine.', erase:'Tap a mine, start or camp to remove it.', pan:'Drag to move around the map.',
                  high:'Paint plateaus; cliffs form around them.', ramp:'Paint over a cliff to make a ramp up.', low:'Paint to lower ground back down.' }[ED.tool] || (ED.tool.startsWith('camp_') ? 'Tap to place a creature camp.' : 'Drag to paint. Pinch to zoom.');
   infoEl.innerHTML = `<h2>Map editor</h2><div class="hint">${ED.name} · ${MAP_W}×${MAP_H}</div>
-    <div class="edrow">Brush ${[1, 2, 3].map(b => `<button data-brush="${b}" class="${ED.brush === b ? 'on' : ''}">${b}</button>`).join('')}</div>
+    ${ED.tool === 'camp'
+      ? `<div class="edrow"><button id="edGroup" class="on">${CREEP_GROUPS[ED.campGroup].label} ▸</button><button id="edSize" class="on">Size ${{ small:'S', medium:'M', big:'L' }[ED.campSize]} ▸</button></div>`
+      : `<div class="edrow">Brush ${[1, 2, 3].map(b => `<button data-brush="${b}" class="${ED.brush === b ? 'on' : ''}">${b}</button>`).join('')}</div>`}
     <div class="edrow">Mirror ${[[0, 'Off'], [2, '2'], [4, '4']].map(([m, l]) => `<button data-mirror="${m}" class="${ED.mirror === m ? 'on' : ''}">${l}</button>`).join('')}</div>
-    <div class="hint">${hint}</div>`;
+    ${ED.tool === 'camp' ? '' : `<div class="hint">${hint}</div>`}`;
+  const cycle = (list, cur) => list[(list.indexOf(cur) + 1) % list.length];   // tap to step through the choices
+  if ($('#edGroup')) $('#edGroup').onclick = () => { ED.campGroup = cycle(Object.keys(CREEP_GROUPS), ED.campGroup); edPanel(); };
+  if ($('#edSize')) $('#edSize').onclick = () => { ED.campSize = cycle(['small', 'medium', 'big'], ED.campSize); edPanel(); };
   cmdsEl.className = 'four';
   cmdsEl.innerHTML = ED_TOOLS.map(([k, l]) => `<button data-tool="${k}" class="${ED.tool === k ? 'on' : ''}">${l}</button>`).join('');
   infoEl.querySelectorAll('[data-brush]').forEach(b => b.onclick = () => { ED.brush = +b.dataset.brush; edPanel(); });
@@ -9474,7 +10010,7 @@ function edPanel(){
 }
 function edData(){
   return { v:1, id:ED.id, name:ED.name, n:MAP_W, biome:ED.biome, terrain:b64enc(G.terrain), height:b64enc(G.height), ramp:b64enc(ED.ramp),
-           mines:G.mines.map(m => [m.tx, m.ty]), starts:ED.starts, camps:ED.camps };
+           mines:G.mines.map(m => [m.tx, m.ty]), mercs:(G.mercs || []).map(m => [m.tx, m.ty]), starts:ED.starts, camps:ED.camps, rules:ED.rules };
 }
 function edSave(){
   const list = userMaps(); if (!ED.id) ED.id = 'm' + Date.now();
@@ -9488,13 +10024,15 @@ function editorStart(data){
   MAP_SIZES.edit = { label:'Editor', n:data.n, hidden:true };
   MAPS.edit = { name:data.name, desc:'', biome:data.biome || 'green', blank:true, hidden:true, dirt:0, water:[0, 1, 1], trees:[0, 1, 1] };
   Object.assign(settings, { map:'edit', size:'edit', opponents:1, teams:[1, 2, 3, 4] });
-  ED = { tool:'grass', brush:2, mirror:0, starts:data.starts || {}, camps:data.camps || [], name:data.name, id:data.id || null, startNo:1, biome:data.biome || 'green', ramp:new Uint8Array(data.n * data.n) };
+  ED = { tool:'grass', brush:2, mirror:0, starts:data.starts || {}, camps:data.camps || [], name:data.name, id:data.id || null, startNo:1, biome:data.biome || 'green', ramp:new Uint8Array(data.n * data.n),
+         campGroup:'standard', campSize:'small', rules:data.rules || { tech:0, off:[] } };
   newGame(); Object.assign(settings, keep);
   G.buildings = []; G.units = []; G.camps = []; G.corpses = []; G.mines = []; G.blocked.fill(0);   // a blank canvas
   if (data.terrain){
     b64into(data.terrain, G.terrain); b64into(data.height, G.height); if (data.ramp) b64into(data.ramp, ED.ramp);
     for (const [x, y] of data.mines || []) placeMine(x, y);
   }
+  G.mercs = []; for (const [x, y] of data.mercs || []) placeMerc(x, y);
   for (let i = 0; i < G.terrain.length; i++) G.wood[i] = G.terrain[i] === T_TREE ? TREE_WOOD : 0;
   G.editor = true; G.revealAll = true; G.explored.fill(1); G.visible.fill(1);
   resetTerrainCache(); updateFogTexture();
@@ -9564,6 +10102,7 @@ function showEditorMenu(){
       <button id="edSaveBtn">Save</button>
       <button id="edTestBtn">Save and play</button>
       <button id="edExportBtn">Share code</button>
+      <button id="edRulesBtn">Rules: ${ED.rules.tech ? 'tech level ' + ED.rules.tech : 'all tech'}${ED.rules.off.length ? ', ' + ED.rules.off.length + ' switched off' : ''}</button>
       <button id="edRenameBtn">Rename</button>
       <button id="edExitBtn">Exit editor</button>
     </div>`);
@@ -9584,6 +10123,7 @@ function showEditorMenu(){
     $('#edCopy').onclick = () => { try { navigator.clipboard.writeText(code); toast('Copied'); } catch (e){ $('#edCode').select(); } };
     $('#backBtn').onclick = showEditorMenu;
   };
+  $('#edRulesBtn').onclick = showEditorRules;
   $('#edRenameBtn').onclick = () => {
     screen(`<h1>Rename</h1><input id="edName" maxlength="24" value="${ED.name}" style="width:100%; max-width:18rem; font:inherit; padding:6px; margin:8px 0 14px">
       <div class="row"><button class="big" id="edOk">OK</button></div>`);
@@ -9636,12 +10176,6 @@ newGame();          // build a map right away so it shows behind the title scree
 refreshUI();
 showTitle();
 requestAnimationFrame(frame);
-</script>
-<script>
-// Register the service worker (sw.js) so the game works offline.
-if ('serviceWorker' in navigator && location.protocol !== 'file:'){
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
-}
 </script>
 </body>
 </html>
